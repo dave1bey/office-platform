@@ -1,0 +1,10 @@
+{
+  "appId": "com.office.platform",
+  "appName": "Office Attendance",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "cleartext": true
+  }
+}
+

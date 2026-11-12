@@ -1,0 +1,8 @@
+S.No,Tasks ,Start Date,End Date,This Week Plan,Status ,Total Completed
+,,,,,,So Far
+1,Prepare the test case for 3rd party integration and interface of the bank software ,,,,,
+1.1,"Understand the functionality and purpose of each integration, then create test cases for each third-party system and bank application integrated with the CBS.",2026-11-09,2026-11-14,10,190+ 3rd party integration and interface ,88
+2,Familiarization Training (Main Bank),2026-11-09,2026-11-14,0.05,,0.95
+3,Environment Preparation (Main Bank),2026-10-09,2026-11-14,0.01,,0.11
+4,Familiarization Training (Subsidiaries Bank),2026-11-09,2026-11-14,0.05,,0.95
+5,Environment Preparation (Subsidiaries Bank),2026-11-09,2026-11-14,0.3,,0.45

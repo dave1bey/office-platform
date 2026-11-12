@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gradient-to-br from-blue-50 via-slate-50 to-blue-100/40 text-slate-800 font-sans min-h-screen;
+    font-family: 'Inter', 'Noto Sans Ethiopic', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+}
+
+/* Custom scrollbars - Light Blue & White Theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* FullCalendar Light Blue & White Theme Styling */
+.fullcalendar-theme .fc {
+  --fc-border-color: #e2e8f0;
+  --fc-today-bg-color: #eff6ff;
+  --fc-page-bg-color: #ffffff;
+  --fc-neutral-bg-color: #f8fafc;
+  --fc-list-event-hover-bg-color: #eff6ff;
+}
+
+.fullcalendar-theme .fc-theme-standard th {
+  background-color: #f8fafc;
+  color: #1e3a8a;
+  font-weight: 700;
+  padding: 8px 0;
+  border-color: #e2e8f0;
+}
+
+.fullcalendar-theme .fc-theme-standard td {
+  border-color: #e2e8f0;
+}
+
+.fullcalendar-theme .fc .fc-toolbar-title {
+  color: #0f172a;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.fullcalendar-theme .fc-button-primary {
+  background-color: #2563eb !important;
+  border-color: #1d4ed8 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  border-radius: 0.5rem !important;
+}
+
+.fullcalendar-theme .fc-button-primary:hover {
+  background-color: #1d4ed8 !important;
+}
+
+.fullcalendar-theme .fc-button-primary:disabled {
+  background-color: #93c5fd !important;
+  border-color: #93c5fd !important;
+}
