@@ -825,10 +825,11 @@ const server = http.createServer((req, res) => {
         return;
       }
 
-      // Strictly find matching user by email or employeeCode
+      // Strictly find matching user by email, employeeCode, or 'admin' shortcut for administrator
       const emp = employees.find(e =>
         e.email.toLowerCase() === identifier ||
-        e.employeeCode.toLowerCase() === identifier
+        e.employeeCode.toLowerCase() === identifier ||
+        (identifier === 'admin' && e.role === 'ADMIN')
       );
 
       if (!emp) {
@@ -911,8 +912,14 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Attendance: List All Records
+  if (pathname === '/api/attendance' && req.method === 'GET') {
+    json(attendanceRecords);
+    return;
+  }
+
   // Attendance: Live Status (Default-Present Model: Assume PRESENT unless marked ABSENT)
-  if (pathname === '/api/attendance/live-status' && req.method === 'GET') {
+  if ((pathname === '/api/attendance/live-status' || pathname === '/api/attendance/today') && req.method === 'GET') {
     const list = employees.map(emp => {
       const rec = attendanceRecords.find(r => r.employeeId === emp.id && r.attendanceDate === today);
       const isAbsent = rec && rec.status === 'ABSENT';
@@ -3133,10 +3140,6 @@ getFreePort(PORT).then((availablePort) => {
     console.log(`✨ Serving Full React 18 PWA + REST APIs + Real-time Sockets!`);
     console.log(`================================================================`);
 
-    // Auto-open browser on Windows when started directly
-    if (process.platform === 'win32' && !process.env.NO_AUTO_OPEN) {
-      console.log(`🌐 Opening ${appUrl} in your default browser...`);
-      exec(`start "" "${appUrl}"`);
-    }
+    console.log(`🌐 Ready for access. Open ${appUrl} in your web browser.`);
   });
 });

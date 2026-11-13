@@ -79,19 +79,48 @@ export const App: React.FC = () => {
   // Combined trigger for real-time updates (tasks, attendance, messages)
   const combinedTrigger = dataRefreshCounter + taskUpdateTrigger + attendanceUpdateTrigger + messageUpdateTrigger;
 
+  const handleLogout = useCallback(() => {
+    setUser(null);
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('session_expired_notice');
+  }, []);
+
+  // Strictly verify session token with backend on startup:
+  // If invalid or stale, immediately clear storage and prompt clean login
+  useEffect(() => {
+    const saved = localStorage.getItem('auth_user');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (!parsed || !parsed.token) {
+          handleLogout();
+          return;
+        }
+        fetch('/api/auth/me', {
+          headers: { 'Authorization': `Bearer ${parsed.token}` }
+        })
+        .then(res => {
+          if (!res.ok) {
+            console.warn("Cached session rejected by server. Resetting to login.");
+            handleLogout();
+          }
+        })
+        .catch(() => {
+          // If offline or network error, let offline PWA retain state
+        });
+      } catch (e) {
+        handleLogout();
+      }
+    }
+  }, [handleLogout]);
+
   const handleLogin = (authData: any) => {
     localStorage.removeItem('session_expired_notice');
     setUser(authData);
     localStorage.setItem('auth_user', JSON.stringify(authData));
     localStorage.setItem('auth_token', authData.token);
     extendSession();
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('auth_user');
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('session_expired_notice');
   };
 
   if (!user) {

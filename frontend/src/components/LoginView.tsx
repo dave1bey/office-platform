@@ -40,7 +40,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, deferredPr
 
       if (res.ok) {
         const data = await res.json();
-        onLoginSuccess(data);
+        if (data && data.token && data.role) {
+          onLoginSuccess(data);
+        } else {
+          setError(data?.error || "Authentication failed. Invalid server response.");
+        }
       } else {
         let errText = "Invalid email or password.";
         try {

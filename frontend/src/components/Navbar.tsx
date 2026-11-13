@@ -265,7 +265,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     <ChangePasswordModal
       isOpen={showPasswordModal}
       onClose={() => setShowPasswordModal(false)}
-      token={token || localStorage.getItem('token') || ''}
+      token={token || localStorage.getItem('auth_token') || localStorage.getItem('token') || user?.token || ''}
       user={user}
     />
     </>
