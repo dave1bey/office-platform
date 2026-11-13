@@ -46,6 +46,10 @@ interface LeaderboardItem {
   period?: string;
   totalTasks: number;
   completedTasks: number;
+  pendingApprovalTasks?: number;
+  overdueTasks?: number;
+  overduePenalty?: number;
+  avgQualityRating?: number;
   totalWeight: number;
   completedWeight: number;
   unweightedTaskRate: number;
@@ -791,13 +795,14 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
               <thead className="bg-blue-50/80 text-xs uppercase tracking-wider text-blue-950 font-bold border-b border-blue-200">
                 <tr>
                   <th className="px-4 py-3 rounded-l-lg">Rank</th>
-                  <th className="px-4 py-3">Employee</th>
+                  <th className="px-4 py-3">Staff Employee</th>
                   <th className="px-4 py-3">Department</th>
                   <th className="px-4 py-3 text-center">Status Today</th>
-                  <th className="px-4 py-3 text-right">Raw Tasks</th>
-                  <th className="px-4 py-3 text-right">Weighted Rate</th>
+                  <th className="px-4 py-3 text-right">Tasks Done</th>
+                  <th className="px-4 py-3 text-right">Quality (1-10)</th>
+                  <th className="px-4 py-3 text-right">Overdue</th>
+                  <th className="px-4 py-3 text-right">Accomplishment</th>
                   <th className="px-4 py-3 text-right">Absent Days</th>
-                  <th className="px-4 py-3 text-right">Absence %</th>
                   <th className="px-4 py-3 text-right rounded-r-lg">Overall Score</th>
                 </tr>
               </thead>
@@ -857,12 +862,30 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                         </span>
                       </td>
 
-                      {/* Raw Tasks */}
+                      {/* Tasks Done */}
                       <td className="px-4 py-3.5 text-right whitespace-nowrap font-mono text-xs">
-                        {item.completedTasks} / {item.totalTasks}
+                        <span className="font-bold text-slate-900">{item.completedTasks}</span> / {item.totalTasks}
                       </td>
 
-                      {/* Weighted Rate */}
+                      {/* Quality Rating (1 to 10) */}
+                      <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300">
+                          <span>⭐ {item.avgQualityRating ? item.avgQualityRating : 8}/10</span>
+                        </span>
+                      </td>
+
+                      {/* Overdue Penalty */}
+                      <td className="px-4 py-3.5 text-right whitespace-nowrap font-mono text-xs">
+                        {item.overdueTasks ? (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            -{item.overdueTasks} pts
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-semibold">0</span>
+                        )}
+                      </td>
+
+                      {/* Accomplishment Rate */}
                       <td className="px-4 py-3.5 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end space-x-2">
                           <div className="w-16 bg-slate-100 rounded-full h-1.5 hidden sm:block overflow-hidden border border-slate-200/60">

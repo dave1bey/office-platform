@@ -26,7 +26,9 @@ import {
   TrendingUp,
   AlertCircle,
   Send,
-  Trash2
+  Trash2,
+  ShieldCheck,
+  Award
 } from 'lucide-react';
 import { TaskAssignmentCombobox } from './TaskAssignmentCombobox';
 
@@ -48,7 +50,7 @@ interface TaskItem {
   dueDate: string;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   severityWeight: number;
-  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+  status: 'PENDING' | 'IN_PROGRESS' | 'PENDING_APPROVAL' | 'COMPLETED';
   teamName?: string;
   assignedToId?: number;
   assignedToName?: string;
@@ -57,8 +59,17 @@ interface TaskItem {
   assignedToMembers?: TaskMember[];
   isMyIndividualTask?: boolean;
   isGroupTask?: boolean;
+  submittedAt?: string;
+  submittedByName?: string;
+  submittedById?: number;
   completedAt?: string;
   completionNote?: string;
+  authorizedBy?: string;
+  authorizedById?: number;
+  authorizedAt?: string;
+  qualityRating?: number;
+  authorizationNote?: string;
+  revisionNote?: string;
   thisWeekPlan?: string;
   totalCompletedSoFar?: string;
 }
@@ -79,6 +90,9 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
   const { t } = useTranslation();
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Dedicated Tab Navigation: 'ACTIVE' | 'PENDING_APPROVAL' | 'COMPLETED' | 'ALL'
+  const [activeTab, setActiveTab] = useState<'ACTIVE' | 'PENDING_APPROVAL' | 'COMPLETED' | 'ALL'>('ACTIVE');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
 
   // Employee Scope Filter: 'INDIVIDUAL' | 'GROUP'
@@ -91,6 +105,20 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
   const [closerDeadlinesFirst, setCloserDeadlinesFirst] = useState<boolean>(true);
   const [deadlineFilter, setDeadlineFilter] = useState<'ALL' | 'OVERDUE_TODAY' | 'NEXT_7_DAYS' | 'NEXT_30_DAYS'>('ALL');
 
+  // Authorize & Rate Modal State (Admin)
+  const [taskToAuthorize, setTaskToAuthorize] = useState<TaskItem | null>(null);
+  const [qualityRating, setQualityRating] = useState<number>(9);
+  const [adminAuthNote, setAdminAuthNote] = useState<string>('');
+  const [authorizing, setAuthorizing] = useState<boolean>(false);
+
+  // Employee Submission Modal State (Employee)
+  const [taskToSubmit, setTaskToSubmit] = useState<TaskItem | null>(null);
+  const [employeeSubmitNote, setEmployeeSubmitNote] = useState<string>('');
+  const [submittingCompletion, setSubmittingCompletion] = useState<boolean>(false);
+
+  // Export State
+  const [exportingTasks, setExportingTasks] = useState<boolean>(false);
+
   // Upload Action Plan Modal State
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadDept, setUploadDept] = useState<string>('Development');
@@ -99,7 +127,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<any | null>(null);
 
-  // Completion note dialog state
+  // Legacy completion note dialog state (Admin quick override)
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
   const [completionNote, setCompletionNote] = useState('');
   const [updating, setUpdating] = useState(false);
@@ -292,10 +320,17 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
   };
 
   const handleStatusChange = async (task: TaskItem, newStatus: string) => {
-    if (newStatus === 'COMPLETED') {
-      setSelectedTask(task);
-      setCompletionNote(task.completionNote || '');
-      return;
+    if (newStatus === 'COMPLETED' || newStatus === 'PENDING_APPROVAL') {
+      if (isEmployee) {
+        setTaskToSubmit(task);
+        setEmployeeSubmitNote(task.completionNote || '');
+        return;
+      } else {
+        setTaskToAuthorize(task);
+        setQualityRating(task.qualityRating || 9);
+        setAdminAuthNote(task.authorizationNote || '');
+        return;
+      }
     }
 
     try {
@@ -313,6 +348,120 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  // Admin: Authorize Task & Rate Quality (1-10) or Request Revision
+  const handleAuthorizeTask = async (approved: boolean) => {
+    if (!taskToAuthorize) return;
+    setAuthorizing(true);
+    try {
+      if (approved) {
+        const res = await fetch(`/api/tasks/${taskToAuthorize.id}/authorize`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            qualityRating,
+            authorizationNote: adminAuthNote
+          })
+        });
+        if (res.ok) {
+          setTaskToAuthorize(null);
+          setAdminAuthNote('');
+          onTaskUpdated();
+          fetchTasks();
+        } else {
+          const err = await res.json();
+          alert(err.error || "Failed to authorize task.");
+        }
+      } else {
+        const res = await fetch(`/api/tasks/${taskToAuthorize.id}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            status: 'REVISION_REQUESTED',
+            note: adminAuthNote || 'Please review requirements and resubmit.'
+          })
+        });
+        if (res.ok) {
+          setTaskToAuthorize(null);
+          setAdminAuthNote('');
+          onTaskUpdated();
+          fetchTasks();
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error processing authorization.");
+    } finally {
+      setAuthorizing(false);
+    }
+  };
+
+  // Employee: Submit Task for Admin Authorization & Rating
+  const handleSubmitTaskForApproval = async () => {
+    if (!taskToSubmit) return;
+    setSubmittingCompletion(true);
+    try {
+      const res = await fetch(`/api/tasks/${taskToSubmit.id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          status: 'PENDING_APPROVAL',
+          note: employeeSubmitNote
+        })
+      });
+      if (res.ok) {
+        setTaskToSubmit(null);
+        setEmployeeSubmitNote('');
+        onTaskUpdated();
+        fetchTasks();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to submit task for review.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error submitting task.");
+    } finally {
+      setSubmittingCompletion(false);
+    }
+  };
+
+  // Export Tasks to Excel
+  const handleExportTasks = async (scope: string = 'ALL') => {
+    setExportingTasks(true);
+    try {
+      const res = await fetch(`/api/tasks/export?format=xlsx&status=${scope}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `office_tasks_${scope.toLowerCase()}_export.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } else {
+        alert("Failed to export tasks to Excel.");
+      }
+    } catch (e) {
+      console.error("Export error", e);
+      alert("Error exporting tasks.");
+    } finally {
+      setExportingTasks(false);
     }
   };
 
@@ -436,6 +585,11 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
     ])
   );
 
+  // Main Tab Counts
+  const pendingApprovalCount = tasks.filter(t => t.status === 'PENDING_APPROVAL').length;
+  const completedCount = tasks.filter(t => t.status === 'COMPLETED').length;
+  const activeCount = tasks.filter(t => t.status === 'PENDING' || t.status === 'IN_PROGRESS').length;
+
   // Deadline urgency counts
   const overdueCount = tasks.filter(t => t.status !== 'COMPLETED' && (getDaysUntilDue(t.dueDate, t.endDate).days ?? 1) < 0).length;
   const dueTodayCount = tasks.filter(t => t.status !== 'COMPLETED' && (getDaysUntilDue(t.dueDate, t.endDate).days ?? 1) === 0).length;
@@ -443,6 +597,11 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
 
   // Filter Tasks
   const filteredTasks = tasks.filter((task) => {
+    // 1. Dedicated Tab Filter: Active vs Pending Authorization vs Completed Archive vs All
+    if (activeTab === 'ACTIVE' && (task.status === 'COMPLETED' || task.status === 'PENDING_APPROVAL')) return false;
+    if (activeTab === 'PENDING_APPROVAL' && task.status !== 'PENDING_APPROVAL') return false;
+    if (activeTab === 'COMPLETED' && task.status !== 'COMPLETED') return false;
+
     if (filterStatus !== 'ALL' && task.status !== filterStatus) return false;
 
     if (isEmployee) {
@@ -648,9 +807,18 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
             </p>
           </div>
 
-          {/* Admin Actions: Clear All & Upload Action Plan */}
+          {/* Admin Actions: Clear All, Export Excel & Upload Action Plan */}
           {!isEmployee && (
             <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
+              <button
+                onClick={() => handleExportTasks(activeTab === 'COMPLETED' ? 'COMPLETED' : activeTab === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : 'ALL')}
+                disabled={exportingTasks}
+                className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition cursor-pointer shadow-sm"
+                title="Export deliverables to Excel (.xlsx)"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{exportingTasks ? 'Exporting...' : 'Export Excel'}</span>
+              </button>
               {tasks.length > 0 && (
                 <button
                   onClick={handleClearAllTasks}
@@ -670,6 +838,69 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
               </button>
             </div>
           )}
+        </div>
+
+        {/* DEDICATED TAB SWITCHER (Active, Pending Authorization, Completed Archive, All) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-blue-50/70 p-2 rounded-xl border border-blue-200/80">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+            <button
+              onClick={() => { setActiveTab('ACTIVE'); setFilterStatus('ALL'); }}
+              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                activeTab === 'ACTIVE'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-700 hover:text-blue-700 hover:bg-blue-100/60'
+              }`}
+            >
+              Active Deliverables ({activeCount})
+            </button>
+            <button
+              onClick={() => { setActiveTab('PENDING_APPROVAL'); setFilterStatus('ALL'); }}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                activeTab === 'PENDING_APPROVAL'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-slate-700 hover:text-amber-800 hover:bg-amber-100/60'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Pending Authorization</span>
+              {pendingApprovalCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
+                  {pendingApprovalCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => { setActiveTab('COMPLETED'); setFilterStatus('ALL'); }}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                activeTab === 'COMPLETED'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-700 hover:text-emerald-800 hover:bg-emerald-100/60'
+              }`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Completed Tasks ({completedCount})</span>
+            </button>
+            <button
+              onClick={() => { setActiveTab('ALL'); setFilterStatus('ALL'); }}
+              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                activeTab === 'ALL'
+                  ? 'bg-slate-700 text-white shadow-sm'
+                  : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              All ({tasks.length})
+            </button>
+          </div>
+
+          {/* Quick Download Tab Tasks */}
+          <button
+            onClick={() => handleExportTasks(activeTab === 'COMPLETED' ? 'COMPLETED' : activeTab === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : 'ALL')}
+            disabled={exportingTasks}
+            className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 text-xs font-bold transition cursor-pointer shadow-sm"
+          >
+            <Download className="w-3.5 h-3.5 text-blue-600" />
+            <span>{activeTab === 'COMPLETED' ? 'Export Completed' : 'Export Tab'}</span>
+          </button>
         </div>
 
         {/* Filter Controls Row */}
@@ -1056,8 +1287,76 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                   )}
                 </div>
 
-                {/* Completion Note Banner (if recorded) */}
-                {task.completionNote && (
+                {/* Authorization & Quality Rating Banner (if authorized) */}
+                {task.authorizedBy && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-blue-900 bg-blue-50/70 px-3 py-2 rounded-lg border border-blue-200">
+                    <div className="flex items-center space-x-2">
+                      <ShieldCheck className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                      <div>
+                        <span className="font-bold">Authorized By: </span>
+                        <span>{task.authorizedBy}</span>
+                        {task.qualityRating !== undefined && (
+                          <span className="ml-2 font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                            ⭐ Work Quality: {task.qualityRating}/10
+                          </span>
+                        )}
+                        {task.authorizationNote && (
+                          <span className="ml-2 text-slate-600 italic">
+                            &bull; "{task.authorizationNote}"
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {!isEmployee && (
+                      <button
+                        onClick={() => {
+                          setTaskToAuthorize(task);
+                          setQualityRating(task.qualityRating || 9);
+                          setAdminAuthNote(task.authorizationNote || '');
+                        }}
+                        className="text-[11px] font-bold text-blue-700 hover:text-blue-900 underline cursor-pointer"
+                      >
+                        Adjust Quality Rating
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Pending Approval Banner */}
+                {task.status === 'PENDING_APPROVAL' && (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-lg bg-amber-50/80 border border-amber-300 text-xs">
+                    <div className="flex items-start space-x-2">
+                      <Clock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5 animate-pulse" />
+                      <div>
+                        <span className="font-bold text-amber-900">Submitted for Review: </span>
+                        <span className="text-slate-800 font-semibold">{task.submittedByName || task.assignedToName || 'Staff Member'}</span>
+                        {task.completionNote && (
+                          <p className="text-slate-600 italic mt-0.5 font-medium">"{task.completionNote}"</p>
+                        )}
+                      </div>
+                    </div>
+                    {!isEmployee ? (
+                      <button
+                        onClick={() => {
+                          setTaskToAuthorize(task);
+                          setQualityRating(task.qualityRating || 9);
+                          setAdminAuthNote(task.authorizationNote || '');
+                        }}
+                        className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm shadow-amber-600/30 flex items-center space-x-1.5 cursor-pointer self-start sm:self-auto"
+                      >
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>Authorize & Rate Work (1-10)</span>
+                      </button>
+                    ) : (
+                      <span className="text-[11px] font-semibold text-amber-800 bg-amber-100/70 px-2 py-1 rounded border border-amber-200">
+                        Awaiting Administrator authorization
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Completion Note Banner (if recorded and not yet authorized) */}
+                {task.completionNote && !task.authorizedBy && task.status !== 'PENDING_APPROVAL' && (
                   <div className="flex items-center space-x-2 text-xs text-emerald-800 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                     <div>
@@ -1079,15 +1378,17 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                     <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${
                       task.status === 'COMPLETED'
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : task.status === 'PENDING_APPROVAL'
+                        ? 'bg-amber-100 text-amber-900 border border-amber-300 animate-pulse'
                         : task.status === 'IN_PROGRESS'
                         ? 'bg-blue-50 text-blue-700 border border-blue-200'
                         : 'bg-amber-50 text-amber-700 border border-amber-200'
                     }`}>
-                      {task.status}
+                      {task.status === 'PENDING_APPROVAL' ? 'PENDING AUTHORIZATION' : task.status}
                     </span>
                   </div>
 
-                  {/* 3-State Status Action Buttons (Admin OR Assigned Employee Only) */}
+                  {/* Status Action Buttons (Admin OR Assigned Employee Only) */}
                   {(!isEmployee || isIndividualMine) ? (
                     <div className="flex items-center space-x-1.5 bg-blue-50/80 p-1 rounded-lg border border-blue-200">
                       <button
@@ -1110,16 +1411,45 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                       >
                         In Progress
                       </button>
-                      <button
-                        onClick={() => handleStatusChange(task, 'COMPLETED')}
-                        className={`px-2.5 py-1 text-xs rounded-md font-medium transition cursor-pointer ${
-                          task.status === 'COMPLETED'
-                            ? 'bg-emerald-600 text-white font-bold shadow-sm'
-                            : 'text-slate-600 hover:text-emerald-700'
-                        }`}
-                      >
-                        Mark Complete
-                      </button>
+                      
+                      {isEmployee ? (
+                        <button
+                          onClick={() => {
+                            setTaskToSubmit(task);
+                            setEmployeeSubmitNote(task.completionNote || '');
+                          }}
+                          className={`px-3 py-1 text-xs rounded-md font-bold transition cursor-pointer ${
+                            task.status === 'PENDING_APPROVAL'
+                              ? 'bg-amber-600 text-white shadow-sm'
+                              : task.status === 'COMPLETED'
+                              ? 'bg-emerald-600 text-white shadow-sm'
+                              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200'
+                          }`}
+                        >
+                          {task.status === 'PENDING_APPROVAL' ? 'Submitted' : task.status === 'COMPLETED' ? 'Completed' : 'Mark Finished'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setTaskToAuthorize(task);
+                            setQualityRating(task.qualityRating || 9);
+                            setAdminAuthNote(task.authorizationNote || '');
+                          }}
+                          className={`px-3 py-1 text-xs rounded-md font-bold transition cursor-pointer ${
+                            task.status === 'PENDING_APPROVAL'
+                              ? 'bg-amber-600 text-white shadow-sm animate-pulse'
+                              : task.status === 'COMPLETED'
+                              ? 'bg-emerald-600 text-white shadow-sm'
+                              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200'
+                          }`}
+                        >
+                          {task.status === 'PENDING_APPROVAL'
+                            ? 'Authorize & Rate'
+                            : task.status === 'COMPLETED'
+                            ? `Authorized (${task.qualityRating || 8}/10)`
+                            : 'Authorize & Complete'}
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-center space-x-2 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
@@ -1452,6 +1782,218 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADMIN AUTHORIZE & QUALITY RATING (1-10) MODAL */}
+      {!isEmployee && taskToAuthorize && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white border border-blue-100 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 text-slate-800">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-blue-100 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200 shadow-sm">
+                  <ShieldCheck className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Authorize Deliverable & Rate Quality</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Evaluate completion and assign rating (1 to 10) for performance metrics</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setTaskToAuthorize(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Task Info Summary */}
+            <div className="bg-blue-50/60 border border-blue-100 p-3.5 rounded-xl space-y-1.5">
+              <div className="font-bold text-slate-900 text-sm">{taskToAuthorize.title}</div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                <span className="font-semibold text-blue-800">Dept: {taskToAuthorize.teamName || 'General'}</span>
+                <span>&bull;</span>
+                <span>Assigned To: <strong className="text-slate-800">{taskToAuthorize.assignedToName || 'Staff'}</strong></span>
+                {taskToAuthorize.dueDate && (
+                  <>
+                    <span>&bull;</span>
+                    <span className="font-mono text-slate-500">Deadline: {taskToAuthorize.dueDate}</span>
+                  </>
+                )}
+              </div>
+              {taskToAuthorize.completionNote && (
+                <div className="pt-1.5 border-t border-blue-100/80 text-xs text-slate-700">
+                  <span className="font-bold text-slate-800">Staff Submission Note: </span>
+                  <span className="italic">"{taskToAuthorize.completionNote}"</span>
+                </div>
+              )}
+            </div>
+
+            {/* Quality Rating (1 to 10) Selector */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-800">
+                  Work Quality Rating (1 to 10):
+                </label>
+                <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-900 border border-blue-200">
+                  {qualityRating === 10 ? '⭐ 10/10 Exceptional' :
+                   qualityRating === 9 ? '⭐ 9/10 Outstanding' :
+                   qualityRating === 8 ? '⭐ 8/10 Very Good' :
+                   qualityRating === 7 ? '⭐ 7/10 Good' :
+                   qualityRating === 6 ? '⭐ 6/10 Satisfactory' :
+                   qualityRating === 5 ? '5/10 Average' :
+                   `${qualityRating}/10 Needs Improvement`}
+                </span>
+              </div>
+
+              {/* 1 to 10 Grid Buttons */}
+              <div className="grid grid-cols-10 gap-1.5">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setQualityRating(num)}
+                    className={`py-2 rounded-lg text-center font-bold text-xs transition cursor-pointer border ${
+                      qualityRating === num
+                        ? num >= 9
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-300'
+                          : num >= 7
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-300'
+                          : num >= 5
+                          ? 'bg-amber-600 text-white border-amber-600 shadow-md ring-2 ring-amber-300'
+                          : 'bg-rose-600 text-white border-rose-600 shadow-md ring-2 ring-rose-300'
+                        : 'bg-slate-50 text-slate-700 hover:bg-blue-50 border-slate-200'
+                    }`}
+                  >
+                    {num}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium">
+                ⚡ This score directly weights the points earned by the employee in the Performance Leaderboard & Hall of Fame.
+              </p>
+            </div>
+
+            {/* Admin Authorization / Feedback Note */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Admin Review Notes & Feedback (Optional):
+              </label>
+              <textarea
+                rows={2}
+                value={adminAuthNote}
+                onChange={(e) => setAdminAuthNote(e.target.value)}
+                placeholder="e.g. Great job adhering to ModelBank architecture guidelines and on-time delivery..."
+                className="w-full bg-slate-50 border border-blue-200 rounded-lg p-2.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+              />
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => handleAuthorizeTask(false)}
+                disabled={authorizing}
+                className="px-3 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition cursor-pointer"
+                title="Send task back to employee for revisions"
+              >
+                Request Revisions
+              </button>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setTaskToAuthorize(null)}
+                  className="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAuthorizeTask(true)}
+                  disabled={authorizing}
+                  className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{authorizing ? 'Saving...' : `Authorize & Approve (${qualityRating}/10)`}</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* EMPLOYEE SUBMIT FOR COMPLETION MODAL */}
+      {isEmployee && taskToSubmit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white border border-blue-100 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 text-slate-800">
+            
+            <div className="flex items-center justify-between border-b border-blue-100 pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Submit Deliverable for Review</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Sends an instant review message to the Administrator</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setTaskToSubmit(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-blue-50/60 border border-blue-100 p-3 rounded-xl space-y-1">
+              <div className="font-bold text-slate-900 text-xs">{taskToSubmit.title}</div>
+              <div className="text-[11px] text-slate-500 font-mono">
+                Deadline: {taskToSubmit.dueDate || taskToSubmit.endDate || 'No Deadline'} &bull; Weight: {taskToSubmit.severityWeight}x
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                Accomplishment Details & Notes for Admin:
+              </label>
+              <textarea
+                rows={3}
+                required
+                value={employeeSubmitNote}
+                onChange={(e) => setEmployeeSubmitNote(e.target.value)}
+                placeholder="Explain what was completed, link to documentation, or mention CBS deliverables..."
+                className="w-full bg-slate-50 border border-blue-200 rounded-lg p-3 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+              />
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-lg text-[11px] text-amber-900 leading-relaxed font-medium">
+              ℹ️ Once submitted, the Administrator will be alerted via private message to review your work and assign a quality rating from 1 to 10.
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setTaskToSubmit(null)}
+                className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitTaskForApproval}
+                disabled={submittingCompletion}
+                className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm shadow-blue-600/30 transition cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>{submittingCompletion ? "Submitting..." : "Submit for Authorization"}</span>
+              </button>
+            </div>
+
           </div>
         </div>
       )}

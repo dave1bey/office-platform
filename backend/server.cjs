@@ -245,10 +245,10 @@ function computeLeaderboard(period = 'all', teamFilter = 'ALL') {
     return true;
   };
 
-  // Filter target employees by team
-  const targetEmployees = (teamFilter && teamFilter !== 'ALL')
-    ? employees.filter(e => e.teams && e.teams.includes(teamFilter))
-    : employees;
+  // Filter target employees by team - strictly rank only EMPLOYEE staff (Admins are evaluators, not competitors)
+  const targetEmployees = employees
+    .filter(e => e.role !== 'ADMIN')
+    .filter(e => (teamFilter && teamFilter !== 'ALL') ? (e.teams && e.teams.includes(teamFilter)) : true);
 
   const results = targetEmployees.map((emp) => {
     const empTasks = tasks.filter(t => 
@@ -257,17 +257,45 @@ function computeLeaderboard(period = 'all', teamFilter = 'ALL') {
     );
     const totalTasks = empTasks.length;
     const completedTasks = empTasks.filter(t => t.status === 'COMPLETED').length;
+    const pendingApprovalTasks = empTasks.filter(t => t.status === 'PENDING_APPROVAL').length;
 
     let totalWeight = 0;
-    let completedWeight = 0;
+    let rawDeliveredWeight = 0;
+    let overdueCount = 0;
+    let totalQualityScore = 0;
+    let ratedTasksCount = 0;
+
     for (const t of empTasks) {
-      const w = t.severityWeight || 2;
-      totalWeight += w;
-      if (t.status === 'COMPLETED') completedWeight += w;
+      const baseWeight = t.severityWeight || 2;
+      totalWeight += baseWeight;
+
+      // Overdue Detection: task was completed past deadline OR is still pending/in-progress past deadline
+      const taskEnd = t.dueDate || t.endDate;
+      const isLateDone = t.status === 'COMPLETED' && t.completedAt && taskEnd && (t.completedAt.split('T')[0] > taskEnd);
+      const isPastDueOpen = t.status !== 'COMPLETED' && taskEnd && (todayStr > taskEnd);
+      if (isLateDone || isPastDueOpen) {
+        overdueCount++;
+      }
+
+      if (t.status === 'COMPLETED') {
+        // Quality rating from Admin (1 to 10), defaults to 8 if not yet rated
+        const rating = (typeof t.qualityRating === 'number' && t.qualityRating >= 1 && t.qualityRating <= 10)
+          ? t.qualityRating
+          : 8;
+        totalQualityScore += rating;
+        ratedTasksCount++;
+        // Delivered weight scaled by quality rating (e.g. 10/10 = 100% of weight, 5/10 = 50% of weight)
+        rawDeliveredWeight += Math.round((baseWeight * (rating / 10)) * 10) / 10;
+      }
     }
 
+    // Overdue penalty: deduct 1.0 point for every overdue deliverable
+    const overduePenalty = overdueCount * 1.0;
+    const netDeliveredPoints = Math.max(0, Math.round((rawDeliveredWeight - overduePenalty) * 10) / 10);
+    const avgQualityRating = ratedTasksCount > 0 ? Math.round((totalQualityScore / ratedTasksCount) * 10) / 10 : 0;
+
     const unweightedTaskRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 1000) / 10 : 0;
-    const weightedTaskRate = totalWeight > 0 ? Math.round((completedWeight / totalWeight) * 1000) / 10 : 0;
+    const weightedTaskRate = totalWeight > 0 ? Math.round((netDeliveredPoints / totalWeight) * 1000) / 10 : 0;
 
     const empAtt = attendanceRecords.filter(r => r.employeeId === emp.id && filterAttendanceByPeriod(r));
     const absentRecords = empAtt.filter(r => r.status === 'ABSENT').map(r => ({
@@ -296,8 +324,13 @@ function computeLeaderboard(period = 'all', teamFilter = 'ALL') {
       period,
       totalTasks,
       completedTasks,
+      pendingApprovalTasks,
+      overdueTasks: overdueCount,
+      overduePenalty,
+      avgQualityRating,
       totalWeight,
-      completedWeight,
+      completedWeight: netDeliveredPoints,
+      rawDeliveredWeight,
       unweightedTaskRate,
       weightedTaskRate,
       recordedAbsentDays: absentDays,
@@ -687,6 +720,7 @@ const server = http.createServer((req, res) => {
         employeeCode: empCode,
         fullName,
         email,
+        password: body.password || "password123",
         role: body.role || "EMPLOYEE",
         preferredLang: body.preferredLang || "en",
         teams: assignedTeams
@@ -779,7 +813,7 @@ const server = http.createServer((req, res) => {
   // Auth: Login - Strictly authenticate user identity & password (prevent unauthorized account access)
   if (pathname === '/api/auth/login' && req.method === 'POST') {
     readBody(body => {
-      const identifier = (body.email || body.username || '').trim().toLowerCase();
+      const identifier = (body.email || body.username || body.employeeCode || '').trim().toLowerCase();
       const enteredPassword = String(body.password || '').trim();
 
       if (!identifier) {
@@ -1257,11 +1291,158 @@ const server = http.createServer((req, res) => {
           json({ error: "Access Denied: You can only update tasks assigned to you." }, 403);
           return;
         }
+
+        // Employee marks complete -> goes to PENDING_APPROVAL and sends a direct chat message to Admin
+        if (body.status === 'COMPLETED' || body.status === 'PENDING_APPROVAL') {
+          task.status = 'PENDING_APPROVAL';
+          if (body.note) task.completionNote = body.note;
+          task.submittedAt = new Date().toISOString();
+          task.submittedByName = requester.fullName;
+          task.submittedById = requester.id;
+
+          // Send message to Admin inbox
+          const subMsg = {
+            id: messages.length + 1,
+            senderId: requester.id,
+            senderName: requester.fullName,
+            senderRole: requester.role,
+            recipientType: 'EMPLOYEE',
+            recipientId: 1, // Primary Admin
+            recipientName: "Administrator",
+            content: `📋 [TASK COMPLETION REVIEW] ${requester.fullName} (${requester.employeeCode}) has marked deliverable "${task.title}" as complete.\nCompletion Note: "${task.completionNote || 'Ready for review'}".\nPlease review in Task Manager, authorize, and rate quality from 1 to 10.`,
+            createdAt: new Date().toISOString()
+          };
+          messages.unshift(subMsg);
+          broadcastStompMessage('/topic/messages', subMsg);
+
+          broadcastStompMessage('/topic/tasks/updates', {
+            taskId: task.id,
+            title: task.title,
+            status: task.status,
+            empId: task.assignedToId,
+            timestamp: new Date().toISOString()
+          });
+
+          broadcastStompMessage('/topic/admin/live-feed', {
+            id: String(Date.now()),
+            eventType: 'TASK_SUBMITTED',
+            title: 'Deliverable Submitted for Review',
+            message: `${requester.fullName} submitted '${task.title}' for authorization.`,
+            employeeName: requester.fullName,
+            severity: 'INFO',
+            timestamp: new Date().toISOString()
+          });
+
+          json(task);
+          return;
+        }
+
+        // Employee updates status to IN_PROGRESS or PENDING
+        task.status = body.status;
+        if (body.note) task.completionNote = body.note;
+
+        broadcastStompMessage('/topic/tasks/updates', {
+          taskId: task.id,
+          title: task.title,
+          status: task.status,
+          empId: task.assignedToId,
+          timestamp: new Date().toISOString()
+        });
+
+        json(task);
+        return;
       }
 
+      // Requester is ADMIN:
+      if (body.status === 'COMPLETED') {
+        task.status = 'COMPLETED';
+        task.authorizedBy = requester.fullName;
+        task.authorizedById = requester.id;
+        task.authorizedAt = new Date().toISOString();
+        task.completedAt = new Date().toISOString();
+        if (body.qualityRating !== undefined) {
+          task.qualityRating = Math.max(1, Math.min(10, parseInt(body.qualityRating) || 8));
+        } else if (task.qualityRating === undefined) {
+          task.qualityRating = 8;
+        }
+        if (body.note) task.authorizationNote = body.note;
+        if (body.completionNote) task.completionNote = body.completionNote;
+
+        // Send confirmation chat message to the assigned employee
+        const targetEmpId = (task.assignedToIds && task.assignedToIds[0]) || task.assignedToId || 2;
+        const targetEmp = employees.find(e => e.id === targetEmpId);
+        const approvalMsg = {
+          id: messages.length + 1,
+          senderId: requester.id,
+          senderName: requester.fullName,
+          senderRole: 'ADMIN',
+          recipientType: 'EMPLOYEE',
+          recipientId: targetEmpId,
+          recipientName: targetEmp ? targetEmp.fullName : "Staff Member",
+          content: `✅ [TASK AUTHORIZED] Your deliverable "${task.title}" has been authorized as COMPLETED by ${requester.fullName}.\nQuality Rating: ${task.qualityRating}/10.${task.authorizationNote ? `\nFeedback: "${task.authorizationNote}"` : ''}`,
+          createdAt: new Date().toISOString()
+        };
+        messages.unshift(approvalMsg);
+        broadcastStompMessage('/topic/messages', approvalMsg);
+
+        broadcastStompMessage('/topic/tasks/updates', {
+          taskId: task.id,
+          title: task.title,
+          status: task.status,
+          empId: task.assignedToId,
+          timestamp: new Date().toISOString()
+        });
+
+        broadcastStompMessage('/topic/admin/live-feed', {
+          id: String(Date.now()),
+          eventType: 'TASK_AUTHORIZED',
+          title: 'Deliverable Approved & Rated',
+          message: `Admin ${requester.fullName} approved '${task.title}' with Quality Rating ${task.qualityRating}/10.`,
+          employeeName: requester.fullName,
+          severity: 'SUCCESS',
+          timestamp: new Date().toISOString()
+        });
+
+        json(task);
+        return;
+      }
+
+      // Admin request revisions
+      if (body.status === 'REVISION_REQUESTED' || (body.status === 'IN_PROGRESS' && task.status === 'PENDING_APPROVAL')) {
+        task.status = 'IN_PROGRESS';
+        task.revisionNote = body.note || 'Admin requested revision before approving completion.';
+        const targetEmpId = (task.assignedToIds && task.assignedToIds[0]) || task.assignedToId || 2;
+        const targetEmp = employees.find(e => e.id === targetEmpId);
+        const revMsg = {
+          id: messages.length + 1,
+          senderId: requester.id,
+          senderName: requester.fullName,
+          senderRole: 'ADMIN',
+          recipientType: 'EMPLOYEE',
+          recipientId: targetEmpId,
+          recipientName: targetEmp ? targetEmp.fullName : "Staff Member",
+          content: `⚠️ [REVISION REQUESTED] Deliverable "${task.title}" requires revisions before completion authorization.\nAdmin Note: "${task.revisionNote}"`,
+          createdAt: new Date().toISOString()
+        };
+        messages.unshift(revMsg);
+        broadcastStompMessage('/topic/messages', revMsg);
+
+        broadcastStompMessage('/topic/tasks/updates', {
+          taskId: task.id,
+          title: task.title,
+          status: task.status,
+          empId: task.assignedToId,
+          timestamp: new Date().toISOString()
+        });
+
+        json(task);
+        return;
+      }
+
+      // Default fallback status update
       task.status = body.status;
       if (body.note) task.completionNote = body.note;
-      if (body.status === 'COMPLETED') task.completedAt = new Date().toISOString();
+      if (body.qualityRating !== undefined) task.qualityRating = parseInt(body.qualityRating);
 
       broadcastStompMessage('/topic/tasks/updates', {
         taskId: task.id,
@@ -1271,20 +1452,143 @@ const server = http.createServer((req, res) => {
         timestamp: new Date().toISOString()
       });
 
-      broadcastStompMessage('/topic/admin/tasks', task);
-      broadcastStompMessage('/topic/admin/live-feed', {
-        id: String(Date.now()),
-        eventType: 'TASK_UPDATE',
-        title: `Task ${task.status}`,
-        message: `${task.assignedToName || 'Staff'} marked '${task.title}' as ${task.status} ${task.completionNote ? `("${task.completionNote}")` : ''}`,
-        employeeName: task.assignedToName || 'Staff',
-        severity: task.status === 'COMPLETED' ? 'SUCCESS' : 'INFO',
-        timestamp: new Date().toISOString()
-      });
-
       json(task);
     });
     return;
+  }
+
+  // Tasks: Authorize Task & Assign Quality Rating (Admin Only)
+  const taskAuthMatch = pathname.match(/\/api\/tasks\/(\d+)\/authorize/);
+  if (taskAuthMatch && req.method === 'POST') {
+    const taskId = parseInt(taskAuthMatch[1]);
+    const requester = getRequester();
+    if (!requester || requester.role !== 'ADMIN') {
+      json({ error: "Access Denied: Only administrators can authorize task completion." }, 403);
+      return;
+    }
+    readBody(body => {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) {
+        json({ error: "Task not found" }, 404);
+        return;
+      }
+
+      const qualityRating = Math.max(1, Math.min(10, parseInt(body.qualityRating) || 8));
+      const authNote = (body.note || body.authorizationNote || '').trim();
+
+      task.status = 'COMPLETED';
+      task.authorizedBy = requester.fullName;
+      task.authorizedById = requester.id;
+      task.authorizedAt = new Date().toISOString();
+      task.completedAt = task.completedAt || new Date().toISOString();
+      task.qualityRating = qualityRating;
+      if (authNote) task.authorizationNote = authNote;
+
+      // Send confirmation chat message to employee
+      const targetEmpId = (task.assignedToIds && task.assignedToIds[0]) || task.assignedToId || 2;
+      const targetEmp = employees.find(e => e.id === targetEmpId);
+      const approvalMsg = {
+        id: messages.length + 1,
+        senderId: requester.id,
+        senderName: requester.fullName,
+        senderRole: 'ADMIN',
+        recipientType: 'EMPLOYEE',
+        recipientId: targetEmpId,
+        recipientName: targetEmp ? targetEmp.fullName : "Staff Member",
+        content: `✅ [TASK AUTHORIZED] Your deliverable "${task.title}" has been authorized as COMPLETED by ${requester.fullName}.\nQuality Rating: ${qualityRating}/10.${authNote ? `\nFeedback: "${authNote}"` : ''}`,
+        createdAt: new Date().toISOString()
+      };
+      messages.unshift(approvalMsg);
+      broadcastStompMessage('/topic/messages', approvalMsg);
+
+      broadcastStompMessage('/topic/tasks/updates', {
+        taskId: task.id,
+        title: task.title,
+        status: task.status,
+        empId: task.assignedToId,
+        timestamp: new Date().toISOString()
+      });
+
+      broadcastStompMessage('/topic/admin/live-feed', {
+        id: String(Date.now()),
+        eventType: 'TASK_AUTHORIZED',
+        title: 'Deliverable Approved & Rated',
+        message: `Admin ${requester.fullName} approved '${task.title}' with Quality Rating ${qualityRating}/10.`,
+        employeeName: requester.fullName,
+        severity: 'SUCCESS',
+        timestamp: new Date().toISOString()
+      });
+
+      json({ success: true, task });
+    });
+    return;
+  }
+
+  // Tasks: Export Tasks to Excel / CSV with Start Date, End Date, Completed By, Authorized By, Quality Rating
+  if (pathname === '/api/tasks/export' && req.method === 'GET') {
+    const requester = getRequester();
+    if (!requester) {
+      json({ error: "Authentication required" }, 401);
+      return;
+    }
+
+    const format = (parsedUrl.query.format || 'xlsx').toLowerCase();
+    const statusFilter = (parsedUrl.query.status || 'ALL').toUpperCase();
+
+    let exportList = tasks;
+    if (statusFilter !== 'ALL') {
+      exportList = tasks.filter(t => t.status === statusFilter);
+    }
+
+    const rows = [
+      ['Task ID', 'Deliverable Title', 'Department', 'Start Date', 'End Date', 'Status', 'Completed By', 'Authorized By', 'Quality Rating (1-10)', 'Completion Note', 'Authorization Note']
+    ];
+
+    exportList.forEach((t, idx) => {
+      rows.push([
+        t.customTaskId || String(t.id),
+        t.title || '',
+        t.teamName || 'General',
+        t.startDate || '',
+        t.endDate || t.dueDate || '',
+        t.status || 'PENDING',
+        t.assignedToName || t.submittedByName || '',
+        t.authorizedBy || '',
+        t.qualityRating !== undefined ? String(t.qualityRating) : '',
+        t.completionNote || '',
+        t.authorizationNote || ''
+      ]);
+    });
+
+    if (format === 'csv') {
+      const csvContent = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="tasks_${statusFilter.toLowerCase()}_export.csv"`
+      });
+      res.end(csvContent);
+      return;
+    }
+
+    try {
+      const xlsxBuffer = generateExcelReport(rows, [
+        ['Export Timestamp', new Date().toISOString()],
+        ['Exported By', requester.fullName],
+        ['Status Scope', statusFilter],
+        ['Total Count', String(exportList.length)]
+      ]);
+      res.writeHead(200, {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="tasks_${statusFilter.toLowerCase()}_export.xlsx"`
+      });
+      res.end(xlsxBuffer);
+      return;
+    } catch (err) {
+      console.error("Error generating tasks Excel export", err);
+      res.writeHead(500);
+      res.end("Excel generation error");
+      return;
+    }
   }
 
   // Tasks: Delete Deliverable (Admin Only - Employees Strictly Forbidden)
@@ -1778,7 +2082,9 @@ const server = http.createServer((req, res) => {
         description: null,
         responsible: null,
         owner: null,
-        due: null
+        due: null,
+        authorized: null,
+        qualityRating: null
       };
 
       if (rawRows.length > 0) {
@@ -1809,6 +2115,10 @@ const server = http.createServer((req, res) => {
             colMap.impact = col;
           } else if (v.includes('mitigation') || v.includes('next step') || v.includes('description')) {
             colMap.description = col;
+          } else if (v.includes('authorize') || v.includes('approved by') || v.includes('authorized by')) {
+            colMap.authorized = col;
+          } else if (v.includes('quality') || v.includes('rating') || v.includes('score')) {
+            colMap.qualityRating = col;
           }
         }
       }
@@ -1944,6 +2254,9 @@ const server = http.createServer((req, res) => {
           }
         }
 
+        const parsedAuth = colMap.authorized ? (row[colMap.authorized] || '').trim() : '';
+        const parsedRating = colMap.qualityRating ? parseInt(row[colMap.qualityRating]) : null;
+
         const newTask = {
           id: tasks.length + 1,
           customTaskId: customId,
@@ -1957,6 +2270,8 @@ const server = http.createServer((req, res) => {
           priority,
           severityWeight,
           status,
+          authorizedBy: parsedAuth || (status === 'COMPLETED' ? 'Administrator' : null),
+          qualityRating: (!isNaN(parsedRating) && parsedRating >= 1 && parsedRating <= 10) ? parsedRating : (status === 'COMPLETED' ? 8 : undefined),
           teamName: department,
           thisWeekPlan: normalizedWeekPlan,
           totalCompletedSoFar: normalizedCompleted,

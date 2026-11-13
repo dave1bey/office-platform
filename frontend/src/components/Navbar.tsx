@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LogOut, Globe, Activity, Shield, User, Smartphone, Clock, RefreshCw, ChevronDown } from 'lucide-react';
+import { LogOut, Globe, Activity, Shield, User, Smartphone, Clock, RefreshCw, ChevronDown, KeyRound } from 'lucide-react';
 import { MobileInstallModal } from './MobileInstallModal';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 interface NavbarProps {
   user: any;
+  token?: string;
   onLogout: () => void;
   connected: boolean;
   deferredPrompt?: any;
@@ -16,6 +18,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({
   user,
+  token,
   onLogout,
   connected,
   deferredPrompt,
@@ -26,6 +29,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const { t, i18n } = useTranslation();
   const [showMobileModal, setShowMobileModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showSessionMenu, setShowSessionMenu] = useState(false);
 
   const changeLanguage = (lang: string) => {
@@ -228,6 +232,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
               </div>
 
+              {/* Change Password Button */}
+              <button
+                onClick={() => setShowPasswordModal(true)}
+                className="p-2 rounded-lg bg-blue-50 text-slate-600 hover:text-blue-700 hover:bg-blue-100 border border-blue-100 transition cursor-pointer"
+                title="Change Account Password"
+              >
+                <KeyRound className="w-4 h-4" />
+              </button>
+
               <button
                 onClick={onLogout}
                 className="p-2 rounded-lg bg-blue-50 text-slate-600 hover:text-rose-600 hover:bg-rose-50 border border-blue-100 transition cursor-pointer"
@@ -247,6 +260,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       isOpen={showMobileModal}
       onClose={() => setShowMobileModal(false)}
       deferredPrompt={deferredPrompt}
+    />
+
+    <ChangePasswordModal
+      isOpen={showPasswordModal}
+      onClose={() => setShowPasswordModal(false)}
+      token={token || localStorage.getItem('token') || ''}
+      user={user}
     />
     </>
   );

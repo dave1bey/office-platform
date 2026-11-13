@@ -69,6 +69,7 @@ export const TeamStaffManagement: React.FC<TeamStaffManagementProps> = ({
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('password123');
   const [newRole, setNewRole] = useState<'ADMIN' | 'MANAGER' | 'EMPLOYEE'>('EMPLOYEE');
   const [newLang, setNewLang] = useState('en');
   const [selectedTeamsForUser, setSelectedTeamsForUser] = useState<string[]>([]);
@@ -209,6 +210,7 @@ export const TeamStaffManagement: React.FC<TeamStaffManagementProps> = ({
           employeeCode: newCode,
           fullName: newName,
           email: newEmail,
+          password: newPassword,
           role: newRole,
           preferredLang: newLang,
           teams: selectedTeamsForUser
@@ -219,6 +221,7 @@ export const TeamStaffManagement: React.FC<TeamStaffManagementProps> = ({
         setShowUserModal(false);
         setNewName('');
         setNewEmail('');
+        setNewPassword('password123');
         setSelectedTeamsForUser([]);
         onDataChanged();
         fetchData();
@@ -974,18 +977,30 @@ export const TeamStaffManagement: React.FC<TeamStaffManagementProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Preferred Language</label>
-                  <select
-                    value={newLang}
-                    onChange={(e) => setNewLang(e.target.value)}
-                    className="w-full bg-slate-50 border border-blue-200 rounded-lg p-2 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
-                  >
-                    <option value="en">English (EN)</option>
-                    <option value="am">Amharic / አማርኛ (AM)</option>
-                    <option value="ti">Tigrinya / ትግርኛ (TI)</option>
-                    <option value="om">Afaan Oromoo (OM)</option>
-                  </select>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Initial Password</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="password123"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full bg-slate-50 border border-blue-200 rounded-lg p-2 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 placeholder-slate-400 font-mono"
+                  />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Preferred Language</label>
+                <select
+                  value={newLang}
+                  onChange={(e) => setNewLang(e.target.value)}
+                  className="w-full bg-slate-50 border border-blue-200 rounded-lg p-2 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
+                >
+                  <option value="en">English (EN)</option>
+                  <option value="am">Amharic / አማርኛ (AM)</option>
+                  <option value="ti">Tigrinya / ትግርኛ (TI)</option>
+                  <option value="om">Afaan Oromoo (OM)</option>
+                </select>
               </div>
 
               {/* Assign to Teams Checkboxes */}

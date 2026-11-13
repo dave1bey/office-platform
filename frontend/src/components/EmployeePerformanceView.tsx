@@ -26,6 +26,9 @@ interface PerformanceData {
     period: string;
     totalTasks: number;
     completedTasks: number;
+    overdueTasks?: number;
+    overduePenalty?: number;
+    avgQualityRating?: number;
     totalWeight: number;
     completedWeight: number;
     unweightedTaskRate: number;
@@ -252,6 +255,20 @@ export const EmployeePerformanceView: React.FC<EmployeePerformanceViewProps> = (
                   {emp?.completedWeight || 0} / {emp?.totalWeight || 0} pts
                 </span>
               </div>
+              <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
+                <span>Avg Work Quality:</span>
+                <span className="font-bold text-amber-700">
+                  ⭐ {emp?.avgQualityRating ? emp.avgQualityRating : 8}/10
+                </span>
+              </div>
+              {emp?.overdueTasks ? (
+                <div className="flex items-center justify-between text-xs text-rose-600 mt-1">
+                  <span>Overdue Penalty:</span>
+                  <span className="font-bold">
+                    -{emp.overdueTasks} pts
+                  </span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
                 <span>Completed Tasks:</span>
                 <span className="font-semibold text-slate-800">

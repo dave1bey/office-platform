@@ -105,6 +105,7 @@ export const App: React.FC = () => {
       {/* Top Navigation with Session Status */}
       <Navbar
         user={user}
+        token={token}
         onLogout={handleLogout}
         connected={connected}
         deferredPrompt={deferredPrompt}
