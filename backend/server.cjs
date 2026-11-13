@@ -21,6 +21,14 @@ const { exec } = require('child_process');
 let PORT = process.env.PORT ? parseInt(process.env.PORT) : 8090;
 const DIST_DIR = path.resolve(__dirname, '..', 'frontend', 'dist');
 
+// Timezone-safe local calendar date helper (YYYY-MM-DD) avoiding UTC day-shift
+function getLocalDateString(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // In-Memory Database Seed
 const teams = [
   { id: 1, teamName: "Development", teamNameAm: "የልማት ቡድን", teamNameTi: "ናይ ምዕባለ ጋንታ", teamNameOm: "Garee Misoomaa" },
@@ -36,7 +44,7 @@ const employees = [
   { id: 5, employeeCode: "EMP-005", fullName: "Sara Tesfaye", email: "sara@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "am", teams: ["Operations"] }
 ];
 
-let today = new Date().toISOString().split('T')[0];
+let today = getLocalDateString();
 
 let attendanceRecords = [
   { id: 1, employeeId: 3, attendanceDate: today, checkIn: new Date().toISOString(), status: "PRESENT" },
@@ -106,7 +114,7 @@ function broadcastStompMessage(topic, payload) {
 // Helper: Calculate array of YYYY-MM-DD dates in a date range (UTC-safe)
 function getDatesInRange(startDateStr, endDateStr) {
   const dates = [];
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateString();
   const startStr = startDateStr || todayStr;
   const endStr = endDateStr || startStr;
 
@@ -166,38 +174,53 @@ function syncTemporaryAdminStatus(emp) {
 function computeLeaderboard(period = 'all', teamFilter = 'ALL') {
   employees.forEach(syncTemporaryAdminStatus);
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = getLocalDateString(now);
 
-  // Week bounds: Monday to Sunday
+  // Week bounds: Monday to Sunday in local calendar
   const dayOfWeek = now.getDay() || 7;
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - dayOfWeek + 1);
-  const startOfWeekStr = startOfWeek.toISOString().split('T')[0];
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6);
-  const endOfWeekStr = endOfWeek.toISOString().split('T')[0];
+  const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 1);
+  const endOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 7);
+  const startOfWeekStr = getLocalDateString(startOfWeek);
+  const endOfWeekStr = getLocalDateString(endOfWeek);
 
+  // Month bounds: 1st of month to last day of month in local calendar
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const startOfMonthStr = getLocalDateString(startOfMonth);
+  const endOfMonthStr = getLocalDateString(endOfMonth);
+
+  // Year bounds
   const currentYearStr = String(now.getFullYear());
+  const startOfYearStr = `${currentYearStr}-01-01`;
+  const endOfYearStr = `${currentYearStr}-12-31`;
 
   // Determine working days baseline for absence rate calculation
   let workingDays = 20;
   if (period === 'day') workingDays = 1;
   else if (period === 'week') workingDays = 5;
+  else if (period === 'month') workingDays = 22;
   else if (period === 'year') workingDays = 240;
 
-  // Filter tasks by period
+  // Filter tasks by period (supports range overlap: taskStart <= periodEnd && taskEnd >= periodStart)
   const filterTaskByPeriod = (t) => {
     if (period === 'all') return true;
-    const taskDate = t.dueDate || t.endDate || t.startDate;
-    if (!taskDate) return true;
+    const taskStart = t.startDate || t.dueDate || t.endDate;
+    const taskEnd = t.endDate || t.dueDate || t.startDate;
+    if (!taskStart && !taskEnd) return true;
+    const s = taskStart || taskEnd;
+    const e = taskEnd || taskStart;
+
     if (period === 'day') {
-      return (t.dueDate === todayStr || t.startDate === todayStr || t.endDate === todayStr);
+      return (s <= todayStr && e >= todayStr) || t.dueDate === todayStr || t.startDate === todayStr || t.endDate === todayStr;
     }
     if (period === 'week') {
-      return (taskDate >= startOfWeekStr && taskDate <= endOfWeekStr);
+      return (s <= endOfWeekStr && e >= startOfWeekStr);
+    }
+    if (period === 'month') {
+      return (s <= endOfMonthStr && e >= startOfMonthStr);
     }
     if (period === 'year') {
-      return taskDate.startsWith(currentYearStr);
+      return (s <= endOfYearStr && e >= startOfYearStr);
     }
     return true;
   };
@@ -212,6 +235,9 @@ function computeLeaderboard(period = 'all', teamFilter = 'ALL') {
     }
     if (period === 'week') {
       return (attDate >= startOfWeekStr && attDate <= endOfWeekStr);
+    }
+    if (period === 'month') {
+      return (attDate >= startOfMonthStr && attDate <= endOfMonthStr);
     }
     if (period === 'year') {
       return attDate.startsWith(currentYearStr);
@@ -2147,6 +2173,12 @@ const server = http.createServer((req, res) => {
 
     const period = (parsedUrl.query.period || 'all').toLowerCase();
     const allStats = computeLeaderboard(period, 'ALL');
+    let workingDays = 20;
+    if (period === 'day') workingDays = 1;
+    else if (period === 'week') workingDays = 5;
+    else if (period === 'month') workingDays = 22;
+    else if (period === 'year') workingDays = 240;
+
     const myStats = allStats.find(item => item.employeeId === requester.id) || {
       employeeId: requester.id,
       employeeCode: requester.employeeCode,
@@ -2160,7 +2192,7 @@ const server = http.createServer((req, res) => {
       unweightedTaskRate: 0,
       weightedTaskRate: 0,
       recordedAbsentDays: 0,
-      totalWorkingDays: period === 'day' ? 1 : period === 'week' ? 5 : period === 'year' ? 240 : 20,
+      totalWorkingDays: workingDays,
       absenceRate: 0,
       overallScore: 0,
       todayAttendanceStatus: "PRESENT"
@@ -2168,23 +2200,45 @@ const server = http.createServer((req, res) => {
 
     // Calculate Department Benchmark for same period
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = getLocalDateString(now);
     const dayOfWeek = now.getDay() || 7;
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - dayOfWeek + 1);
-    const startOfWeekStr = startOfWeek.toISOString().split('T')[0];
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    const endOfWeekStr = endOfWeek.toISOString().split('T')[0];
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 1);
+    const endOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 7);
+    const startOfWeekStr = getLocalDateString(startOfWeek);
+    const endOfWeekStr = getLocalDateString(endOfWeek);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const startOfMonthStr = getLocalDateString(startOfMonth);
+    const endOfMonthStr = getLocalDateString(endOfMonth);
+
     const currentYearStr = String(now.getFullYear());
+    const startOfYearStr = `${currentYearStr}-01-01`;
+    const endOfYearStr = `${currentYearStr}-12-31`;
 
     const filterTask = (t) => {
       if (period === 'all') return true;
-      const d = t.dueDate || t.endDate || t.startDate;
-      if (!d) return true;
-      if (period === 'day') return (t.dueDate === todayStr || t.startDate === todayStr || t.endDate === todayStr);
-      if (period === 'week') return (d >= startOfWeekStr && d <= endOfWeekStr);
-      if (period === 'year') return d.startsWith(currentYearStr);
+      const taskStart = t.startDate || t.dueDate || t.endDate;
+      const taskEnd = t.endDate || t.dueDate || t.startDate;
+      if (!taskStart && !taskEnd) return true;
+      const s = taskStart || taskEnd;
+      const e = taskEnd || taskStart;
+
+      if (period === 'day') return (s <= todayStr && e >= todayStr) || t.dueDate === todayStr || t.startDate === todayStr || t.endDate === todayStr;
+      if (period === 'week') return (s <= endOfWeekStr && e >= startOfWeekStr);
+      if (period === 'month') return (s <= endOfMonthStr && e >= startOfMonthStr);
+      if (period === 'year') return (s <= endOfYearStr && e >= startOfYearStr);
+      return true;
+    };
+
+    const filterAtt = (r) => {
+      if (period === 'all') return true;
+      const attDate = r.attendanceDate;
+      if (!attDate) return true;
+      if (period === 'day') return attDate === todayStr;
+      if (period === 'week') return (attDate >= startOfWeekStr && attDate <= endOfWeekStr);
+      if (period === 'month') return (attDate >= startOfMonthStr && attDate <= endOfMonthStr);
+      if (period === 'year') return attDate.startsWith(currentYearStr);
       return true;
     };
 
@@ -2202,8 +2256,8 @@ const server = http.createServer((req, res) => {
     const deptWeightedRate = deptTotalWeight > 0 ? Math.round((deptCompletedWeight / deptTotalWeight) * 1000) / 10 : 0;
     const deptUnweightedRate = deptTotalTasks > 0 ? Math.round((deptCompletedTasks / deptTotalTasks) * 1000) / 10 : 0;
 
-    // Filter employee's absence records
-    const myAbsences = attendanceRecords.filter(r => r.employeeId === requester.id && r.status === 'ABSENT');
+    // Filter employee's absence records for this period (or all when period=all)
+    const myAbsences = attendanceRecords.filter(r => r.employeeId === requester.id && r.status === 'ABSENT' && filterAtt(r));
 
     json({
       employee: myStats,
@@ -2313,8 +2367,34 @@ const server = http.createServer((req, res) => {
       return;
     }
     const period = (parsedUrl.query.period || 'all').toLowerCase();
+    
+    // Time-bounded filtering for employee absence history
+    const now = new Date();
+    const todayStr = getLocalDateString(now);
+    const dayOfWeek = now.getDay() || 7;
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 1);
+    const endOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 7);
+    const startOfWeekStr = getLocalDateString(startOfWeek);
+    const endOfWeekStr = getLocalDateString(endOfWeek);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const startOfMonthStr = getLocalDateString(startOfMonth);
+    const endOfMonthStr = getLocalDateString(endOfMonth);
+    const currentYearStr = String(now.getFullYear());
+
+    const filterAttByPeriod = (r) => {
+      if (period === 'all') return true;
+      const d = r.attendanceDate;
+      if (!d) return true;
+      if (period === 'day') return d === todayStr;
+      if (period === 'week') return d >= startOfWeekStr && d <= endOfWeekStr;
+      if (period === 'month') return d >= startOfMonthStr && d <= endOfMonthStr;
+      if (period === 'year') return d.startsWith(currentYearStr);
+      return true;
+    };
+
     const records = attendanceRecords
-      .filter(r => r.employeeId === empId && r.status === 'ABSENT')
+      .filter(r => r.employeeId === empId && r.status === 'ABSENT' && filterAttByPeriod(r))
       .map(r => ({
         id: r.id,
         attendanceDate: r.attendanceDate,
@@ -2340,7 +2420,7 @@ const server = http.createServer((req, res) => {
   // Analytics: Hall of Fame Awards (Employee of the Week, Month, Year)
   if (pathname === '/api/analytics/awards' && req.method === 'GET') {
     const weekLb = computeLeaderboard('week', 'ALL');
-    const monthLb = computeLeaderboard('all', 'ALL');
+    const monthLb = computeLeaderboard('month', 'ALL');
     const yearLb = computeLeaderboard('year', 'ALL');
 
     const resolveAward = (category, lb, label) => {

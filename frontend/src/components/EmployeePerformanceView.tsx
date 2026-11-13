@@ -69,7 +69,7 @@ export const EmployeePerformanceView: React.FC<EmployeePerformanceViewProps> = (
   onAbsenceReported
 }) => {
   const { t } = useTranslation();
-  const [period, setPeriod] = useState<'ALL' | 'DAY' | 'WEEK' | 'YEAR'>('ALL');
+  const [period, setPeriod] = useState<'ALL' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'>('ALL');
   const [data, setData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -172,9 +172,9 @@ export const EmployeePerformanceView: React.FC<EmployeePerformanceViewProps> = (
           </p>
         </div>
 
-        {/* Period Selector Tabs: Day, Week, Year, All */}
+        {/* Period Selector Tabs: Day, Week, Month, Year, All */}
         <div className="flex items-center bg-blue-50/80 p-1 rounded-lg border border-blue-200 text-xs self-start md:self-auto font-semibold">
-          {(['DAY', 'WEEK', 'YEAR', 'ALL'] as const).map((p) => (
+          {(['DAY', 'WEEK', 'MONTH', 'YEAR', 'ALL'] as const).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
@@ -184,7 +184,7 @@ export const EmployeePerformanceView: React.FC<EmployeePerformanceViewProps> = (
                   : 'text-slate-600 hover:text-blue-700'
               }`}
             >
-              {p === 'DAY' ? 'Today' : p === 'WEEK' ? 'This Week' : p === 'YEAR' ? 'This Year' : 'All Time'}
+              {p === 'DAY' ? 'Today' : p === 'WEEK' ? 'This Week' : p === 'MONTH' ? 'This Month' : p === 'YEAR' ? 'This Year' : 'All Time'}
             </button>
           ))}
         </div>

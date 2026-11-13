@@ -103,8 +103,8 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'TASK_RATE' | 'ABSENCE_RATE'>('TASK_RATE');
 
-  // Filter States: Day, Week, Year, All
-  const [selectedPeriod, setSelectedPeriod] = useState<'ALL' | 'DAY' | 'WEEK' | 'YEAR'>('ALL');
+  // Filter States: Day, Week, Month, Year, All
+  const [selectedPeriod, setSelectedPeriod] = useState<'ALL' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'>('ALL');
   const [selectedTeam, setSelectedTeam] = useState<string>('ALL');
 
   // Export State
@@ -281,7 +281,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
   const totalAbsentDays = items.reduce((acc, i) => acc + i.recordedAbsentDays, 0);
   const activeTeamSize = Math.max(1, items.length);
   const teamAbsenteeismRate = Math.round(
-    (totalAbsentDays / (activeTeamSize * (selectedPeriod === 'DAY' ? 1 : selectedPeriod === 'WEEK' ? 5 : selectedPeriod === 'YEAR' ? 250 : 30))) * 1000
+    (totalAbsentDays / (activeTeamSize * (selectedPeriod === 'DAY' ? 1 : selectedPeriod === 'WEEK' ? 5 : selectedPeriod === 'MONTH' ? 22 : selectedPeriod === 'YEAR' ? 240 : 20))) * 1000
   ) / 10;
 
   return (
@@ -642,7 +642,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
               <h2 className="text-xl font-bold text-slate-900 flex items-center space-x-2">
                 <span>{t('leaderboard')}</span>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200 font-bold">
-                  {selectedPeriod === 'DAY' ? 'Today' : selectedPeriod === 'WEEK' ? 'This Week' : selectedPeriod === 'YEAR' ? 'This Year' : 'All Time'}
+                  {selectedPeriod === 'DAY' ? 'Today' : selectedPeriod === 'WEEK' ? 'This Week' : selectedPeriod === 'MONTH' ? 'This Month' : selectedPeriod === 'YEAR' ? 'This Year' : 'All Time'}
                 </span>
               </h2>
               <p className="text-xs text-slate-500 font-medium">
@@ -654,7 +654,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
           {/* Action & Filter Controls */}
           <div className="flex flex-wrap items-center gap-3">
             
-            {/* PERIOD FILTER TABS (Day, Week, Year, All) */}
+            {/* PERIOD FILTER TABS (Day, Week, Month, Year, All) */}
             <div className="flex bg-blue-50/80 p-1 rounded-lg border border-blue-200 text-xs font-semibold">
               <button
                 onClick={() => setSelectedPeriod('DAY')}
@@ -675,6 +675,16 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
               >
                 <Calendar className="w-3.5 h-3.5" />
                 <span>Week</span>
+              </button>
+              <button
+                onClick={() => setSelectedPeriod('MONTH')}
+                className={`flex items-center space-x-1 px-3 py-1.5 rounded-md transition cursor-pointer ${
+                  selectedPeriod === 'MONTH' ? 'bg-blue-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-blue-700'
+                }`}
+                title="Filter by This Month"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Month</span>
               </button>
               <button
                 onClick={() => setSelectedPeriod('YEAR')}
