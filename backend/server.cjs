@@ -371,7 +371,8 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
-  '.ttf': 'font/ttf'
+  '.ttf': 'font/ttf',
+  '.apk': 'application/vnd.android.package-archive'
 };
 
 const server = http.createServer((req, res) => {
@@ -432,6 +433,29 @@ const server = http.createServer((req, res) => {
       primaryLanUrl: addresses[0] ? addresses[0].url : `http://localhost:${PORT}/`
     });
     return;
+  }
+
+  // Mobile APK Download Endpoint
+  if (pathname === '/api/download/apk' || pathname === '/Office-Attendance.apk') {
+    const apkPaths = [
+      path.resolve(__dirname, '..', 'frontend', 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk'),
+      path.resolve(__dirname, '..', 'frontend', 'dist', 'Office-Attendance.apk'),
+      path.resolve(__dirname, '..', 'Office-Attendance.apk')
+    ];
+    const foundPath = apkPaths.find(p => fs.existsSync(p));
+    if (foundPath) {
+      const stat = fs.statSync(foundPath);
+      res.writeHead(200, {
+        'Content-Type': 'application/vnd.android.package-archive',
+        'Content-Length': stat.size,
+        'Content-Disposition': 'attachment; filename="Office-Attendance.apk"'
+      });
+      fs.createReadStream(foundPath).pipe(res);
+      return;
+    } else {
+      json({ error: "APK build is in progress or not yet generated. You can install instantly via your phone's browser (Add to Home Screen)." }, 404);
+      return;
+    }
   }
 
   // --- REST APIS ---

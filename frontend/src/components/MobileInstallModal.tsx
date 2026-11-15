@@ -230,6 +230,28 @@ export const MobileInstallModal: React.FC<MobileInstallModalProps> = ({
                 Confirm by tapping <strong>"Install"</strong>. The app icon will appear directly on your Android home screen and app drawer!
               </li>
             </ol>
+
+            {/* Direct APK Download Option */}
+            <div className="pt-2 border-t border-slate-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-900">Or Download Native Android Package:</span>
+                <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-mono font-bold">.APK (Android 8.0+)</span>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                You can download the APK file directly to your phone and install it:
+              </p>
+              <a
+                href="/Office-Attendance.apk"
+                download="Office-Attendance.apk"
+                className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download Office-Attendance.apk</span>
+              </a>
+              <p className="text-[10px] text-slate-400">
+                💡 Note: When opening the downloaded APK, if prompted, allow "Install unknown apps" for Chrome in your Android Settings.
+              </p>
+            </div>
           </div>
         )}
 
