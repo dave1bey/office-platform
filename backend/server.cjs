@@ -1578,12 +1578,19 @@ const server = http.createServer((req, res) => {
     }
 
     try {
-      const xlsxBuffer = generateExcelReport(rows, [
-        ['Export Timestamp', new Date().toISOString()],
-        ['Exported By', requester.fullName],
-        ['Status Scope', statusFilter],
-        ['Total Count', String(exportList.length)]
-      ]);
+      const xlsxBuffer = generateExcelReport(
+        rows,
+        [
+          ['Export Metric', 'Value'],
+          ['Report Name', `Office Deliverables Export (${statusFilter})`],
+          ['Export Timestamp', new Date().toISOString()],
+          ['Exported By', `${requester.fullName} (${requester.employeeCode || requester.role})`],
+          ['Status Scope Filter', statusFilter],
+          ['Total Deliverables Exported', String(exportList.length)]
+        ],
+        'Deliverables and Tasks',
+        'Export Summary'
+      );
       res.writeHead(200, {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="tasks_${statusFilter.toLowerCase()}_export.xlsx"`
@@ -2316,37 +2323,33 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Helper: Generate dynamic multi-sheet XLSX report
-  function generateExcelReport(leaderboardRows, attendanceRows) {
-    const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-  <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-  <Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
-</Types>`;
+  // Helper: Column letter generator (0 -> A, 25 -> Z, 26 -> AA, etc.)
+  function getExcelColumnLetter(colIndex) {
+    let temp = colIndex;
+    let letter = '';
+    while (temp >= 0) {
+      letter = String.fromCharCode((temp % 26) + 65) + letter;
+      temp = Math.floor(temp / 26) - 1;
+    }
+    return letter;
+  }
 
-    const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-</Relationships>`;
+  function xmlEscape(val) {
+    return String(val ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;')
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  }
 
-    const workbookRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
-  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
-</Relationships>`;
-
-    const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets>
-    <sheet name="Performance Leaderboard" sheetId="1" r:id="rId1"/>
-    <sheet name="Attendance & Absence Log" sheetId="2" r:id="rId2"/>
-  </sheets>
-</workbook>`;
+  // Robust Zero-Install Excel (.xlsx) Generator (100% OpenXML ECMA-376 & WPS/Excel Compliant)
+  function generateExcelReport(sheet1Rows, sheet2Rows, sheet1Name = 'Deliverables and Tasks', sheet2Name = 'Export Summary') {
+    const sheetsData = [
+      { name: sheet1Name, rows: sheet1Rows || [] },
+      { name: sheet2Name, rows: sheet2Rows || [] }
+    ];
 
     const strings = [];
     const stringMap = new Map();
@@ -2359,31 +2362,125 @@ const server = http.createServer((req, res) => {
       return idx;
     }
 
-    function buildSheetXml(rows) {
-      let xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>`;
+    // 1. [Content_Types].xml
+    let contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+  <Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>`;
+    sheetsData.forEach((s, idx) => {
+      contentTypesXml += `\n  <Override PartName="/xl/worksheets/sheet${idx + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`;
+    });
+    contentTypesXml += `\n</Types>`;
+
+    // 2. _rels/.rels
+    const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+
+    // 3. xl/_rels/workbook.xml.rels
+    let workbookRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`;
+    sheetsData.forEach((s, idx) => {
+      workbookRelsXml += `\n  <Relationship Id="rId${idx + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${idx + 1}.xml"/>`;
+    });
+    workbookRelsXml += `\n  <Relationship Id="rId${sheetsData.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`;
+    workbookRelsXml += `\n  <Relationship Id="rId${sheetsData.length + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>`;
+    workbookRelsXml += `\n</Relationships>`;
+
+    // 4. xl/workbook.xml
+    let workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>`;
+    sheetsData.forEach((s, idx) => {
+      const cleanName = xmlEscape(s.name.replace(/[:\\/?*\[\]]/g, ' '));
+      workbookXml += `\n    <sheet name="${cleanName}" sheetId="${idx + 1}" r:id="rId${idx + 1}"/>`;
+    });
+    workbookXml += `\n  </sheets>\n</workbook>`;
+
+    // 5. xl/styles.xml (Standard formatting for WPS Spreadsheets & Microsoft Excel)
+    const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="2">
+    <font><sz val="11"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font>
+  </fonts>
+  <fills count="3">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF1E40AF"/><bgColor indexed="64"/></patternFill></fill>
+  </fills>
+  <borders count="2">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border>
+      <left style="thin"><color rgb="FFD1D5DB"/></left>
+      <right style="thin"><color rgb="FFD1D5DB"/></right>
+      <top style="thin"><color rgb="FFD1D5DB"/></top>
+      <bottom style="thin"><color rgb="FFD1D5DB"/></bottom>
+      <diagonal/>
+    </border>
+  </borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="3">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+  </cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+
+    // 6. Worksheets
+    const worksheetFiles = [];
+    sheetsData.forEach((s, idx) => {
+      const rows = s.rows || [];
+      const maxCols = rows.reduce((max, r) => Math.max(max, r.length), 0);
+      const lastColLetter = maxCols > 0 ? getExcelColumnLetter(maxCols - 1) : 'A';
+      const rowCount = Math.max(rows.length, 1);
+
+      let sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <dimension ref="A1:${lastColLetter}${rowCount}"/>
+  <sheetViews>
+    <sheetView tabSelected="${idx === 0 ? '1' : '0'}" workbookViewId="0"/>
+  </sheetViews>
+  <sheetFormatPr defaultRowHeight="18"/>
+  <sheetData>`;
+
       rows.forEach((row, rIdx) => {
         const rNum = rIdx + 1;
-        xml += `<row r="${rNum}">`;
+        const isHeader = rIdx === 0;
+        const sAttr = isHeader ? ' s="1"' : ' s="2"';
+        sheetXml += `\n    <row r="${rNum}" ht="${isHeader ? '24' : '20'}">`;
         row.forEach((val, cIdx) => {
-          const colLetter = String.fromCharCode(65 + cIdx);
-          const strIdx = getStrIdx(val);
-          xml += `<c r="${colLetter}${rNum}" t="s"><v>${strIdx}</v></c>`;
+          const colLetter = getExcelColumnLetter(cIdx);
+          if (val !== undefined && val !== null && String(val) !== '') {
+            const strIdx = getStrIdx(val);
+            sheetXml += `<c r="${colLetter}${rNum}" t="s"${sAttr}><v>${strIdx}</v></c>`;
+          } else {
+            sheetXml += `<c r="${colLetter}${rNum}"${sAttr}/>`;
+          }
         });
-        xml += `</row>`;
+        sheetXml += `</row>`;
       });
-      xml += `</sheetData></worksheet>`;
-      return xml;
-    }
 
-    const sheet1Xml = buildSheetXml(leaderboardRows);
-    const sheet2Xml = buildSheetXml(attendanceRows);
-
-    let sharedStringsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${strings.length}" uniqueCount="${strings.length}">`;
-    strings.forEach(s => {
-      const escaped = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      sharedStringsXml += `<si><t>${escaped}</t></si>`;
+      sheetXml += `\n  </sheetData>\n</worksheet>`;
+      worksheetFiles.push({
+        name: `xl/worksheets/sheet${idx + 1}.xml`,
+        content: sheetXml
+      });
     });
-    sharedStringsXml += `</sst>`;
+
+    // 7. xl/sharedStrings.xml
+    let sharedStringsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${strings.length}" uniqueCount="${strings.length}">`;
+    strings.forEach(s => {
+      const escaped = xmlEscape(s);
+      sharedStringsXml += `\n  <si><t xml:space="preserve">${escaped}</t></si>`;
+    });
+    sharedStringsXml += `\n</sst>`;
 
     const crcTable = [];
     for (let n = 0; n < 256; n++) {
@@ -2391,7 +2488,7 @@ const server = http.createServer((req, res) => {
       for (let k = 0; k < 8; k++) c = ((c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1));
       crcTable[n] = c;
     }
-    function crc32(buf) {
+    function calcCrc32(buf) {
       let crc = -1;
       for (let i = 0; i < buf.length; i++) crc = (crc >>> 8) ^ crcTable[(crc ^ buf[i]) & 0xff];
       return (crc ^ -1) >>> 0;
@@ -2402,28 +2499,50 @@ const server = http.createServer((req, res) => {
       { name: '_rels/.rels', content: rootRelsXml },
       { name: 'xl/_rels/workbook.xml.rels', content: workbookRelsXml },
       { name: 'xl/workbook.xml', content: workbookXml },
-      { name: 'xl/worksheets/sheet1.xml', content: sheet1Xml },
-      { name: 'xl/worksheets/sheet2.xml', content: sheet2Xml },
+      { name: 'xl/styles.xml', content: stylesXml },
+      ...worksheetFiles,
       { name: 'xl/sharedStrings.xml', content: sharedStringsXml }
     ];
+
+    const dosDate = ((2026 - 1980) << 9) | (11 << 5) | 15;
+    const dosTime = (10 << 11) | (30 << 5);
 
     const fileEntries = [];
     let offset = 0;
     for (const f of files) {
-      const data = Buffer.from(f.content, 'utf8');
+      const rawData = Buffer.isBuffer(f.content) ? f.content : Buffer.from(f.content, 'utf8');
       const nameBuf = Buffer.from(f.name, 'utf8');
-      const crc = crc32(data);
+      const crc = calcCrc32(rawData);
+
+      const compressedData = zlib.deflateRawSync(rawData);
+      const useDeflate = compressedData.length < rawData.length;
+      const finalData = useDeflate ? compressedData : rawData;
+      const method = useDeflate ? 8 : 0;
+
       const localHeader = Buffer.alloc(30);
       localHeader.writeUInt32LE(0x04034b50, 0);
       localHeader.writeUInt16LE(20, 4);
       localHeader.writeUInt16LE(0x0800, 6);
+      localHeader.writeUInt16LE(method, 8);
+      localHeader.writeUInt16LE(dosTime, 10);
+      localHeader.writeUInt16LE(dosDate, 12);
       localHeader.writeUInt32LE(crc, 14);
-      localHeader.writeUInt32LE(data.length, 18);
-      localHeader.writeUInt32LE(data.length, 22);
+      localHeader.writeUInt32LE(finalData.length, 18);
+      localHeader.writeUInt32LE(rawData.length, 22);
       localHeader.writeUInt16LE(nameBuf.length, 26);
       localHeader.writeUInt16LE(0, 28);
-      fileEntries.push({ nameBuf, data, localHeader, crc, offset, length: data.length });
-      offset += localHeader.length + nameBuf.length + data.length;
+
+      fileEntries.push({
+        nameBuf,
+        data: finalData,
+        localHeader,
+        crc,
+        method,
+        offset,
+        compLength: finalData.length,
+        rawLength: rawData.length
+      });
+      offset += localHeader.length + nameBuf.length + finalData.length;
     }
 
     const cdEntries = [];
@@ -2434,9 +2553,12 @@ const server = http.createServer((req, res) => {
       cdHeader.writeUInt16LE(20, 4);
       cdHeader.writeUInt16LE(20, 6);
       cdHeader.writeUInt16LE(0x0800, 8);
+      cdHeader.writeUInt16LE(entry.method, 10);
+      cdHeader.writeUInt16LE(dosTime, 12);
+      cdHeader.writeUInt16LE(dosDate, 14);
       cdHeader.writeUInt32LE(entry.crc, 16);
-      cdHeader.writeUInt32LE(entry.length, 20);
-      cdHeader.writeUInt32LE(entry.length, 24);
+      cdHeader.writeUInt32LE(entry.compLength, 20);
+      cdHeader.writeUInt32LE(entry.rawLength, 24);
       cdHeader.writeUInt16LE(entry.nameBuf.length, 28);
       cdHeader.writeUInt16LE(0, 30);
       cdHeader.writeUInt16LE(0, 32);
@@ -2450,10 +2572,13 @@ const server = http.createServer((req, res) => {
 
     const eocd = Buffer.alloc(22);
     eocd.writeUInt32LE(0x06054b50, 0);
+    eocd.writeUInt16LE(0, 4);
+    eocd.writeUInt16LE(0, 6);
     eocd.writeUInt16LE(fileEntries.length, 8);
     eocd.writeUInt16LE(fileEntries.length, 10);
     eocd.writeUInt32LE(cdSize, 12);
     eocd.writeUInt32LE(offset, 16);
+    eocd.writeUInt16LE(0, 20);
 
     const chunks = [];
     for (const entry of fileEntries) {
@@ -2664,7 +2789,7 @@ const server = http.createServer((req, res) => {
     }
 
     try {
-      const xlsxBuffer = generateExcelReport(lbRows, attRows);
+      const xlsxBuffer = generateExcelReport(lbRows, attRows, 'Performance Leaderboard', 'Attendance and Absence Log');
       res.writeHead(200, {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="office_performance_${period}_${team}.xlsx"`
