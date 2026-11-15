@@ -825,12 +825,20 @@ const server = http.createServer((req, res) => {
         return;
       }
 
-      // Strictly find matching user by email, employeeCode, or 'admin' shortcut for administrator
-      const emp = employees.find(e =>
-        e.email.toLowerCase() === identifier ||
-        e.employeeCode.toLowerCase() === identifier ||
-        (identifier === 'admin' && e.role === 'ADMIN')
-      );
+      // Strictly find matching user by email, employeeCode, username prefix (e.g. 'hagos'), first name, or 'admin'
+      const emp = employees.find(e => {
+        const emailLower = (e.email || '').toLowerCase();
+        const emailPrefix = emailLower.split('@')[0];
+        const codeLower = (e.employeeCode || '').toLowerCase();
+        const firstName = (e.fullName || '').toLowerCase().split(' ')[0];
+        return (
+          emailLower === identifier ||
+          codeLower === identifier ||
+          emailPrefix === identifier ||
+          firstName === identifier ||
+          (identifier === 'admin' && e.role === 'ADMIN')
+        );
+      });
 
       if (!emp) {
         json({ error: "Authentication Failed: No account found matching '" + identifier + "'. Please check your email or employee code." }, 401);

@@ -103,7 +103,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, deferredPr
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Corporate Email or Employee Code
+              Username, Corporate Email or Employee Code
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -111,14 +111,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, deferredPr
                 type="text"
                 required
                 autoComplete="username"
-                placeholder="e.g. hagos@office.lan or EMP-003"
+                placeholder="e.g. hagos, hagos@office.lan, or EMP-003"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-slate-50 border border-blue-200 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-800 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 placeholder-slate-400 transition"
               />
             </div>
             <p className="text-[10px] text-slate-400 mt-1">
-              Employees can sign in with their corporate email or assigned Employee ID code.
+              Employees can sign in with their username (e.g. hagos), corporate email, or Employee ID code.
             </p>
           </div>
 
