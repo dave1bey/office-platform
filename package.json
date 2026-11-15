@@ -1,0 +1,14 @@
+{
+  "name": "office-attendance-platform",
+  "version": "1.1.0",
+  "description": "Office Action Plan, Real-Time Attendance & Performance Platform",
+  "main": "backend/server.cjs",
+  "scripts": {
+    "postinstall": "npm install --prefix frontend && npm run build --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "start": "node backend/server.cjs"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

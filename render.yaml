@@ -1,13 +1,10 @@
 services:
   - type: web
-    name: office-attendance-performance-pwa
+    name: office-attendance-platform
     env: node
     plan: free
-    buildCommand: "npm install --prefix frontend && npm run build --prefix frontend"
-    startCommand: "node backend/server.cjs"
+    buildCommand: npm install --prefix frontend && npm run build --prefix frontend
+    startCommand: node backend/server.cjs
     envVars:
-      - key: PORT
-        value: 10000
       - key: NODE_ENV
         value: production
-
