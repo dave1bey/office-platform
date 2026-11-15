@@ -4,7 +4,7 @@
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {
-    "url": "http://192.168.1.3:8090",
+    "url": "https://office-platform-ix7i.onrender.com",
     "cleartext": true
   }
 }
