@@ -415,6 +415,17 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Health & Keep-Alive Ping endpoint (Prevents Free Cloud Spin-Down / Sleep)
+  if (pathname === '/api/health' && req.method === 'GET') {
+    json({
+      status: "OK",
+      timestamp: new Date().toISOString(),
+      uptimeSeconds: Math.floor(process.uptime()),
+      message: "Office Attendance Platform is healthy and awake 24/7."
+    });
+    return;
+  }
+
   // System: Network & Mobile Access Info (for Android and iOS app installation)
   if (pathname === '/api/system/network-info' && req.method === 'GET') {
     const ifaces = os.networkInterfaces();
@@ -3379,5 +3390,22 @@ getFreePort(PORT).then((availablePort) => {
     console.log(`================================================================`);
 
     console.log(`🌐 Ready for access. Open ${appUrl} in your web browser.`);
+
+    // 24/7 Cloud Auto-KeepAlive: Automatically pings its own public URL every 8 minutes
+    // so Render and other free cloud providers NEVER sleep due to inactivity!
+    const externalUrl = process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || process.env.SERVER_URL || '';
+    if (externalUrl) {
+      const pingIntervalMs = 8 * 60 * 1000; // Ping every 8 minutes (Render spin-down is 15 minutes)
+      setInterval(() => {
+        try {
+          const healthUrl = `${externalUrl.replace(/\/+$/, '')}/api/health`;
+          const client = healthUrl.startsWith('https') ? require('https') : require('http');
+          client.get(healthUrl, (res) => {
+            console.log(`[KeepAlive] Pinged ${healthUrl} - Status: ${res.statusCode} (Instance kept awake 24/7)`);
+          }).on('error', () => {});
+        } catch (e) {}
+      }, pingIntervalMs);
+      console.log(`🛡️ 24/7 Cloud Auto-KeepAlive activated for: ${externalUrl}`);
+    }
   });
 });
