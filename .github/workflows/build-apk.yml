@@ -15,11 +15,8 @@ jobs:
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: '21'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+          distribution: 'temurin'
+          java-version: '17'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -29,19 +26,19 @@ jobs:
       - name: Install Frontend Dependencies & Build Web Assets
         run: |
           cd frontend
-          npm install
+          npm install --legacy-peer-deps
           npm run build
 
       - name: Sync Capacitor Android
         run: |
           cd frontend
-          npx cap sync android
+          npx cap copy android
 
       - name: Build Android Debug APK
         run: |
           cd frontend/android
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
       - name: Rename APK
         run: |
