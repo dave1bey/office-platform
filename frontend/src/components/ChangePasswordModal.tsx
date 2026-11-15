@@ -1,20 +1,27 @@
 import React, { useState } from 'react';
-import { KeyRound, Lock, Eye, EyeOff, CheckCircle2, AlertCircle, X, ShieldCheck } from 'lucide-react';
+import { KeyRound, Lock, Eye, EyeOff, CheckCircle2, AlertCircle, X, ShieldCheck, User } from 'lucide-react';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
-  token: string;
-  user: any;
+  token?: string;
+  user?: any;
+  targetEmployee?: any; // For admin resetting employee password
+  initialIdentifier?: string; // For login screen prefill
 }
 
 export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   isOpen,
   onClose,
   token,
-  user
+  user,
+  targetEmployee,
+  initialIdentifier = ''
 }) => {
+  const [identifier, setIdentifier] = useState(initialIdentifier || user?.employeeCode || user?.email || '');
   const [currentPassword, setCurrentPassword] = useState('');
+  const [verifyCode, setVerifyCode] = useState('');
+  const [useCodeVerify, setUseCodeVerify] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showCurrent, setShowCurrent] = useState(false);
@@ -26,10 +33,35 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
 
   if (!isOpen) return null;
 
+  const isAdminResettingStaff = Boolean(targetEmployee && token);
+  const isDirectLoginMode = Boolean(!token && !targetEmployee);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    if (isDirectLoginMode && !identifier.trim()) {
+      setError("Please enter your username, email, or employee code.");
+      return;
+    }
+
+    if (isDirectLoginMode) {
+      if (useCodeVerify) {
+        if (!verifyCode.trim()) {
+          setError("Please enter your Employee ID Code to verify your identity.");
+          return;
+        }
+      } else {
+        if (!currentPassword.trim()) {
+          setError("Please enter your current password, or toggle to verify with Employee ID Code.");
+          return;
+        }
+      }
+    } else if (!isAdminResettingStaff && !currentPassword.trim()) {
+      setError("Please enter your current password.");
+      return;
+    }
 
     if (newPassword.length < 4) {
       setError("New password must be at least 4 characters long.");
@@ -43,21 +75,35 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
 
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          currentPassword,
+      let url = '/api/auth/change-password';
+      let payload: any = { currentPassword, newPassword };
+      const headers: any = { 'Content-Type': 'application/json' };
+
+      if (isAdminResettingStaff) {
+        url = `/api/admin/employees/${targetEmployee.id}/reset-password`;
+        payload = { newPassword };
+        headers['Authorization'] = `Bearer ${token}`;
+      } else if (isDirectLoginMode) {
+        url = '/api/auth/reset-password';
+        payload = {
+          identifier: identifier.trim(),
+          currentPassword: currentPassword.trim(),
+          verifyCode: verifyCode.trim(),
           newPassword
-        })
+        };
+      } else if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json();
       if (res.ok) {
-        setSuccess(data.message || "Password changed successfully!");
+        setSuccess(data.message || "Password updated successfully!");
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
@@ -86,9 +132,15 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
               <KeyRound className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900">Change Account Password</h3>
+              <h3 className="text-base font-bold text-slate-900">
+                {isAdminResettingStaff ? `Reset Password for ${targetEmployee.fullName}` : "Change Account Password"}
+              </h3>
               <p className="text-[11px] text-slate-500 font-medium">
-                {user?.fullName} ({user?.employeeCode || user?.role})
+                {isAdminResettingStaff
+                  ? `${targetEmployee.fullName} (${targetEmployee.employeeCode})`
+                  : user
+                    ? `${user.fullName} (${user.employeeCode || user.role})`
+                    : "Self-Service Security Update for All Staff"}
               </p>
             </div>
           </div>
@@ -116,29 +168,81 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-3.5">
-          {/* Current Password */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Current Password
-            </label>
-            <div className="relative">
-              <input
-                type={showCurrent ? "text" : "password"}
-                required
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Enter your current password"
-                className="w-full bg-slate-50 border border-blue-200 rounded-lg py-2 pl-3 pr-10 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
-              />
-              <button
-                type="button"
-                onClick={() => setShowCurrent(!showCurrent)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+          {/* Direct Login Mode: Identifier Input */}
+          {isDirectLoginMode && (
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Your Username, Email, or Employee Code
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  required
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="e.g. hagos, abebe, admin, or EMP-003"
+                  className="w-full bg-slate-50 border border-blue-200 rounded-lg py-2 pl-3 pr-3 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+                />
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Verification: Current Password OR Employee Code if forgotten */}
+          {!isAdminResettingStaff && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-700">
+                  {useCodeVerify ? "Verify with Employee ID Code" : "Current Password"}
+                </label>
+                {isDirectLoginMode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseCodeVerify(!useCodeVerify);
+                      setError(null);
+                    }}
+                    className="text-[10px] font-semibold text-blue-600 hover:underline cursor-pointer"
+                  >
+                    {useCodeVerify ? "Use Current Password instead" : "Forgot Current Password?"}
+                  </button>
+                )}
+              </div>
+
+              {useCodeVerify ? (
+                <div>
+                  <input
+                    type="text"
+                    required
+                    value={verifyCode}
+                    onChange={(e) => setVerifyCode(e.target.value)}
+                    placeholder="e.g. EMP-003 or your email"
+                    className="w-full bg-slate-50 border border-blue-200 rounded-lg py-2 px-3 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Enter your assigned Employee Code to securely verify and reset your password.
+                  </p>
+                </div>
+              ) : (
+                <div className="relative">
+                  <input
+                    type={showCurrent ? "text" : "password"}
+                    required
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter your current password"
+                    className="w-full bg-slate-50 border border-blue-200 rounded-lg py-2 pl-3 pr-10 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrent(!showCurrent)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* New Password */}
           <div>
@@ -189,7 +293,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
           </div>
 
           <div className="bg-blue-50/60 border border-blue-100 p-2.5 rounded-lg text-[11px] text-blue-800 leading-relaxed font-medium">
-            🔒 Default initial passwords for seeded accounts are <span className="font-mono font-bold">password123</span>.
+            🔒 Initial default passwords for seeded accounts are <span className="font-mono font-bold">password123</span>. Any employee or admin can change their password at any time.
           </div>
 
           <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
@@ -215,4 +319,3 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     </div>
   );
 };
-

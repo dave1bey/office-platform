@@ -810,6 +810,32 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Admin: Reset Staff Password Directly
+  const resetPassMatch = pathname.match(/^\/api\/admin\/employees\/(\d+)\/reset-password$/);
+  if (resetPassMatch && req.method === 'POST') {
+    const requester = getRequester();
+    if (!requester || requester.role !== 'ADMIN') {
+      json({ error: "Access Denied: Only administrators can reset staff passwords." }, 403);
+      return;
+    }
+    const empId = parseInt(resetPassMatch[1]);
+    const emp = employees.find(e => e.id === empId);
+    if (!emp) {
+      json({ error: "Employee not found" }, 404);
+      return;
+    }
+    readBody(body => {
+      const newPassword = String(body.newPassword || '').trim();
+      if (!newPassword || newPassword.length < 4) {
+        json({ error: "New password must be at least 4 characters long." }, 400);
+        return;
+      }
+      emp.password = newPassword;
+      json({ success: true, message: `Password for ${emp.fullName} (${emp.employeeCode}) has been updated successfully.` });
+    });
+    return;
+  }
+
   // Auth: Login - Strictly authenticate user identity & password (prevent unauthorized account access)
   if (pathname === '/api/auth/login' && req.method === 'POST') {
     readBody(body => {
@@ -893,6 +919,61 @@ const server = http.createServer((req, res) => {
 
       requester.password = newPassword;
       json({ success: true, message: "Password updated successfully. Your account is now strictly secured." });
+    });
+    return;
+  }
+
+  // Auth: Self-Service Password Reset/Update from Login Screen (No Active Login Needed)
+  if (pathname === '/api/auth/reset-password' && req.method === 'POST') {
+    readBody(body => {
+      const identifier = (body.identifier || body.email || body.username || body.employeeCode || '').trim().toLowerCase();
+      const currentPassword = String(body.currentPassword || '').trim();
+      const newPassword = String(body.newPassword || '').trim();
+
+      if (!identifier) {
+        json({ error: "Please enter your username, email, or employee code." }, 400);
+        return;
+      }
+      if (!newPassword || newPassword.length < 4) {
+        json({ error: "New password must be at least 4 characters long." }, 400);
+        return;
+      }
+
+      const emp = employees.find(e => {
+        const emailLower = (e.email || '').toLowerCase();
+        const emailPrefix = emailLower.split('@')[0];
+        const codeLower = (e.employeeCode || '').toLowerCase();
+        const firstName = (e.fullName || '').toLowerCase().split(' ')[0];
+        return (
+          emailLower === identifier ||
+          codeLower === identifier ||
+          emailPrefix === identifier ||
+          firstName === identifier ||
+          (identifier === 'admin' && e.role === 'ADMIN')
+        );
+      });
+
+      if (!emp) {
+        json({ error: "No account found matching '" + identifier + "'." }, 404);
+        return;
+      }
+
+      const expected = emp.password || "password123";
+      const verifyCode = (body.verifyCode || body.employeeCode || '').trim().toLowerCase();
+      
+      const isCurrentPasswordCorrect = currentPassword && (currentPassword === expected);
+      const isCodeVerified = verifyCode && (
+        verifyCode === (emp.employeeCode || '').toLowerCase() || 
+        verifyCode === (emp.email || '').toLowerCase()
+      );
+
+      if (!isCurrentPasswordCorrect && !isCodeVerified) {
+        json({ error: "Verification failed: Please provide your correct current password, or verify your identity with your Employee ID Code." }, 403);
+        return;
+      }
+
+      emp.password = newPassword;
+      json({ success: true, message: `Password for ${emp.fullName} (${emp.employeeCode}) updated successfully! You can now log in with your new password.` });
     });
     return;
   }

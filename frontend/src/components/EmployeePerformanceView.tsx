@@ -13,9 +13,11 @@ import {
   Target,
   BarChart3,
   ShieldCheck,
-  Check
+  Check,
+  KeyRound
 } from 'lucide-react';
 import { MultiDayPicker, MultiDaySelection } from './MultiDayPicker';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 interface PerformanceData {
   employee: {
@@ -78,6 +80,7 @@ export const EmployeePerformanceView: React.FC<EmployeePerformanceViewProps> = (
 
   // Absence Reporting Modal State (Supports Single & Multi-Day Date Ranges)
   const today = new Date().toISOString().split('T')[0];
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showAbsenceModal, setShowAbsenceModal] = useState(false);
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
@@ -175,21 +178,33 @@ export const EmployeePerformanceView: React.FC<EmployeePerformanceViewProps> = (
           </p>
         </div>
 
-        {/* Period Selector Tabs: Day, Week, Month, Year, All */}
-        <div className="flex items-center bg-blue-50/80 p-1 rounded-lg border border-blue-200 text-xs self-start md:self-auto font-semibold">
-          {(['DAY', 'WEEK', 'MONTH', 'YEAR', 'ALL'] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`px-3 py-1.5 rounded-md font-bold transition cursor-pointer ${
-                period === p
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-blue-700'
-              }`}
-            >
-              {p === 'DAY' ? 'Today' : p === 'WEEK' ? 'This Week' : p === 'MONTH' ? 'This Month' : p === 'YEAR' ? 'This Year' : 'All Time'}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+          {/* Period Selector Tabs: Day, Week, Month, Year, All */}
+          <div className="flex items-center bg-blue-50/80 p-1 rounded-lg border border-blue-200 text-xs font-semibold">
+            {(['DAY', 'WEEK', 'MONTH', 'YEAR', 'ALL'] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-3 py-1.5 rounded-md font-bold transition cursor-pointer ${
+                  period === p
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-blue-700'
+                }`}
+              >
+                {p === 'DAY' ? 'Today' : p === 'WEEK' ? 'This Week' : p === 'MONTH' ? 'This Month' : p === 'YEAR' ? 'This Year' : 'All Time'}
+              </button>
+            ))}
+          </div>
+
+          {/* Change Password Button */}
+          <button
+            onClick={() => setShowPasswordModal(true)}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition cursor-pointer shadow-sm"
+            title="Change Account Password"
+          >
+            <KeyRound className="w-3.5 h-3.5 text-blue-600" />
+            <span>Change Password</span>
+          </button>
         </div>
       </div>
 
@@ -488,6 +503,14 @@ export const EmployeePerformanceView: React.FC<EmployeePerformanceViewProps> = (
           </div>
         </div>
       )}
+
+      {/* EMPLOYEE CHANGE PASSWORD MODAL */}
+      <ChangePasswordModal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        token={token}
+        user={currentUser}
+      />
 
     </div>
   );

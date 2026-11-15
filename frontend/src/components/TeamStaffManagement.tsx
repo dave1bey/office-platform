@@ -19,9 +19,11 @@ import {
   Calendar,
   Zap,
   AlertCircle,
-  Send
+  Send,
+  KeyRound
 } from 'lucide-react';
 import { MultiDayPicker, MultiDaySelection } from './MultiDayPicker';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 interface TeamItem {
   id: number;
@@ -101,6 +103,9 @@ export const TeamStaffManagement: React.FC<TeamStaffManagementProps> = ({
   });
   const [tempAdminReason, setTempAdminReason] = useState<string>('');
   const [submittingTempAdmin, setSubmittingTempAdmin] = useState(false);
+
+  // Admin Direct Password Reset State
+  const [resetPasswordEmp, setResetPasswordEmp] = useState<EmployeeItem | null>(null);
 
   // Admin Mark Absent Modal State (Single or Multi-Day for Any Employee)
   const [showAdminAbsenceModal, setShowAdminAbsenceModal] = useState(false);
@@ -584,6 +589,16 @@ export const TeamStaffManagement: React.FC<TeamStaffManagementProps> = ({
                                   <span>Make Temp Admin</span>
                                 </button>
                               )}
+
+                              {/* Reset Staff Password Button */}
+                              <button
+                                onClick={() => setResetPasswordEmp(emp)}
+                                className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold transition cursor-pointer"
+                                title={`Reset password for ${emp.fullName}`}
+                              >
+                                <KeyRound className="w-3.5 h-3.5 text-blue-600" />
+                                <span className="hidden sm:inline">Reset Password</span>
+                              </button>
 
                               {/* Mark Employee Absent (Single or Multi-Day) */}
                               <button
@@ -1262,6 +1277,16 @@ export const TeamStaffManagement: React.FC<TeamStaffManagementProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* ADMIN DIRECT PASSWORD RESET MODAL */}
+      {resetPasswordEmp && (
+        <ChangePasswordModal
+          isOpen={Boolean(resetPasswordEmp)}
+          onClose={() => setResetPasswordEmp(null)}
+          token={token}
+          targetEmployee={resetPasswordEmp}
+        />
       )}
 
     </div>

@@ -235,10 +235,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* Change Password Button */}
               <button
                 onClick={() => setShowPasswordModal(true)}
-                className="p-2 rounded-lg bg-blue-50 text-slate-600 hover:text-blue-700 hover:bg-blue-100 border border-blue-100 transition cursor-pointer"
+                className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-blue-50 text-slate-700 hover:text-blue-700 hover:bg-blue-100 border border-blue-200 transition cursor-pointer font-medium text-xs shadow-sm"
                 title="Change Account Password"
               >
-                <KeyRound className="w-4 h-4" />
+                <KeyRound className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <span className="hidden sm:inline">Change Password</span>
+                <span className="sm:hidden font-semibold">Password</span>
               </button>
 
               <button

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Lock, Mail, Shield, Eye, EyeOff, AlertCircle, Info, ChevronDown, ChevronUp, UserCheck, Smartphone, Clock } from 'lucide-react';
+import { Lock, Mail, Shield, Eye, EyeOff, AlertCircle, Info, ChevronDown, ChevronUp, UserCheck, Smartphone, Clock, KeyRound } from 'lucide-react';
 import { MobileInstallModal } from './MobileInstallModal';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 interface LoginViewProps {
   onLoginSuccess: (data: any) => void;
@@ -17,6 +18,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, deferredPr
   const [error, setError] = useState<string | null>(null);
   const [showDirectoryHelp, setShowDirectoryHelp] = useState(false);
   const [showMobileModal, setShowMobileModal] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [sessionExpiredNotice, setSessionExpiredNotice] = useState<boolean>(() => {
     return localStorage.getItem('session_expired_notice') === 'true';
   });
@@ -146,6 +148,17 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, deferredPr
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            <div className="flex items-center justify-between pt-1.5">
+              <span className="text-[10px] text-slate-400">Default: password123</span>
+              <button
+                type="button"
+                onClick={() => setShowChangePasswordModal(true)}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center space-x-1 cursor-pointer transition py-0.5"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-blue-500" />
+                <span>Change / Reset Password</span>
+              </button>
+            </div>
           </div>
 
           <button
@@ -224,6 +237,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, deferredPr
         isOpen={showMobileModal}
         onClose={() => setShowMobileModal(false)}
         deferredPrompt={deferredPrompt}
+      />
+
+      <ChangePasswordModal
+        isOpen={showChangePasswordModal}
+        onClose={() => setShowChangePasswordModal(false)}
+        initialIdentifier={email}
       />
     </div>
   );
