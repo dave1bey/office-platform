@@ -1,6 +1,6 @@
 {
   "appId": "com.office.platform",
-  "appName": "Office Attendance",
+  "appName": "Office Action",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {

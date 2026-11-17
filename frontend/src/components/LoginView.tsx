@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Lock, Mail, Shield, Eye, EyeOff, AlertCircle, Info, ChevronDown, ChevronUp, UserCheck, Smartphone, Clock, KeyRound } from 'lucide-react';
 import { MobileInstallModal } from './MobileInstallModal';
 import { ChangePasswordModal } from './ChangePasswordModal';
+import { OfficeActionLogo } from './OfficeActionLogo';
 
 interface LoginViewProps {
   onLoginSuccess: (data: any) => void;
@@ -71,14 +72,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, deferredPr
         
         {/* Brand Header */}
         <div className="text-center mb-6">
-          <div className="w-12 h-12 bg-gradient-to-tr from-blue-700 to-blue-500 rounded-xl mx-auto flex items-center justify-center font-black text-xl text-white shadow-lg shadow-blue-500/30 mb-3">
-            OP
+          <div className="flex justify-center mb-3">
+            <OfficeActionLogo size={56} className="shadow-lg shadow-blue-500/25" />
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">{t('appName')}</h1>
           <p className="text-xs text-slate-500 mt-1 font-medium">{t('tagline')}</p>
-          <div className="mt-2 inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+          <div className="mt-2.5 inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
             <Shield className="w-3 h-3 text-blue-600" />
-            <span>Strict Role-Based Access Control</span>
+            <span>Enterprise Access Control</span>
           </div>
         </div>
 

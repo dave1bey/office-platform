@@ -447,8 +447,11 @@ const server = http.createServer((req, res) => {
   }
 
   // Mobile APK Download Endpoint
-  if (pathname === '/api/download/apk' || pathname === '/Office-Attendance.apk') {
+  if (pathname === '/api/download/apk' || pathname === '/Office-Action.apk' || pathname === '/Office-Attendance.apk') {
     const apkPaths = [
+      path.resolve(__dirname, '..', 'frontend', 'public', 'Office-Action.apk'),
+      path.resolve(__dirname, '..', 'Office-Action.apk'),
+      path.resolve(__dirname, '..', 'frontend', 'dist', 'Office-Action.apk'),
       path.resolve(__dirname, '..', 'frontend', 'public', 'Office-Attendance.apk'),
       path.resolve(__dirname, '..', 'Office-Attendance.apk'),
       path.resolve(__dirname, '..', 'frontend', 'dist', 'Office-Attendance.apk'),
@@ -460,7 +463,7 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, {
         'Content-Type': 'application/vnd.android.package-archive',
         'Content-Length': stat.size,
-        'Content-Disposition': 'attachment; filename="Office-Attendance.apk"',
+        'Content-Disposition': 'attachment; filename="Office-Action.apk"',
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
         'Pragma': 'no-cache',
         'Expires': '0'

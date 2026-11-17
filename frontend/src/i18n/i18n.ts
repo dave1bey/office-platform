@@ -4,8 +4,9 @@ import { initReactI18next } from 'react-i18next';
 const resources = {
   en: {
     translation: {
-      appName: "Office Attendance & Action Platform",
-      tagline: "Real-Time Action Plan Execution & Performance",
+      appName: "Office Action Platform",
+      shortAppName: "Office Action",
+      tagline: "Action Plan Execution & Performance",
       login: "Sign In",
       logout: "Sign Out",
       email: "Email Address",
@@ -63,8 +64,9 @@ const resources = {
   },
   am: {
     translation: {
-      appName: "የቢሮ መገኘት እና የድርጊት መድረክ",
-      tagline: "የቀጥታ የድርጊት መርሃ ግብር አፈፃፀም እና ግምገማ",
+      appName: "የቢሮ የድርጊት መድረክ",
+      shortAppName: "ቢሮ አክሽን",
+      tagline: "የድርጊት መርሃ ግብር አፈፃፀም እና ግምገማ",
       login: "ግባ",
       logout: "ውጣ",
       email: "የኢሜይል አድራሻ",
@@ -122,8 +124,9 @@ const resources = {
   },
   ti: {
     translation: {
-      appName: "ናይ ቤት ጽሕፈት ምእታውን መደብ ስራሕን መድረኽ",
-      tagline: "ናይ ቀጥታ መደብ ስራሕ ኣፈጻጽማን ገምጋምን",
+      appName: "ናይ ቤት ጽሕፈት መደብ ስራሕ መድረኽ",
+      shortAppName: "ቤት ጽሕፈት ኣክሽን",
+      tagline: "ናይ መደብ ስራሕ ኣፈጻጽማን ገምጋምን",
       login: "እቶ",
       logout: "ውጻእ",
       email: "ኢመይል ኣድራሻ",
@@ -181,8 +184,9 @@ const resources = {
   },
   om: {
     translation: {
-      appName: "Waltajjii Hojii fi Argama Biiroo",
-      tagline: "Raawwii Sagantaa Hojii fi Madaallii Yeroo Qabatamaa",
+      appName: "Waltajjii Hojii fi Karoora Biiroo",
+      shortAppName: "Hojii Biiroo",
+      tagline: "Raawwii Sagantaa Hojii fi Madaallii",
       login: "Seeni",
       logout: "Bahi",
       email: "Teessoo Imeelii",

@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "short_name": "OfficePlan",
-  "name": "Office Action Plan & Real-Time Attendance",
-  "description": "Real-Time Attendance, Action Plan & Team Performance Platform",
+  "short_name": "Office Action",
+  "name": "Office Action Platform",
+  "description": "Corporate Action Plan Execution, Attendance & Team Performance Platform",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
