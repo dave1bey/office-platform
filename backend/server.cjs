@@ -1301,6 +1301,127 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Tasks: Create New Deliverable Task Manually (Full Template Columns)
+  if (pathname === '/api/tasks' && req.method === 'POST') {
+    const requester = getRequester();
+    if (!requester || (requester.role !== 'ADMIN' && requester.role !== 'MANAGER')) {
+      json({ error: "Access Denied: Only administrators or managers can create tasks." }, 403);
+      return;
+    }
+
+    readBody(body => {
+      const title = (body.title || '').trim();
+      if (!title) {
+        json({ error: "Deliverable task title is required." }, 400);
+        return;
+      }
+
+      const nextId = tasks.length > 0 ? Math.max(...tasks.map(t => typeof t.id === 'number' ? t.id : 0)) + 1 : 1;
+      const customId = (body.customId || body.customTaskId || `A-${String(nextId).padStart(2, '0')}`).trim();
+      const department = (body.department || body.teamName || 'Development').trim();
+
+      // Ensure department exists in teams registry
+      if (department && !teams.some(t => t.teamName.toLowerCase() === department.toLowerCase())) {
+        teams.push({
+          id: teams.length + 1,
+          teamName: department,
+          teamNameAm: department,
+          teamNameTi: department,
+          teamNameOm: department,
+          description: `Action plan team for ${department}`
+        });
+      }
+
+      // Priority and severity weight
+      let priority = (body.priority || 'MEDIUM').toUpperCase();
+      let severityWeight = parseInt(body.severityWeight);
+      if (isNaN(severityWeight)) {
+        if (priority === 'CRITICAL') severityWeight = 4;
+        else if (priority === 'HIGH') severityWeight = 3;
+        else if (priority === 'LOW') severityWeight = 1;
+        else severityWeight = 2;
+      }
+
+      // Format percentages cleanly
+      let rawWeekPlan = body.thisWeekPlan !== undefined ? String(body.thisWeekPlan).trim() : '';
+      let rawCompleted = body.totalCompletedSoFar !== undefined ? String(body.totalCompletedSoFar).trim() : '';
+      let status = (body.status || 'PENDING').toUpperCase();
+
+      const planNum = parseFloat(rawWeekPlan);
+      const normalizedWeekPlan = (!isNaN(planNum) && planNum <= 1 && planNum > 0 && !rawWeekPlan.includes('%'))
+        ? `${Math.round(planNum * 100)}%`
+        : (rawWeekPlan ? `${rawWeekPlan}${rawWeekPlan.includes('%') ? '' : '%'}` : '0%');
+
+      const compNum = parseFloat(rawCompleted);
+      const normalizedCompleted = (!isNaN(compNum) && compNum <= 1 && compNum > 0 && !rawCompleted.includes('%'))
+        ? `${Math.round(compNum * 100)}%`
+        : (rawCompleted ? `${rawCompleted}${rawCompleted.includes('%') ? '' : '%'}` : (status === 'COMPLETED' ? '100%' : '0%'));
+
+      // If marked completed or 100%, update status
+      if (status === 'COMPLETED' && (!rawCompleted || normalizedCompleted === '0%')) {
+        // completed
+      }
+
+      // Resolve assigned employees
+      let assignedEmps = [];
+      if (Array.isArray(body.assignedToIds) && body.assignedToIds.length > 0) {
+        assignedEmps = employees.filter(e => body.assignedToIds.map(Number).includes(e.id));
+      } else if (body.assignedToId) {
+        const emp = employees.find(e => e.id === parseInt(body.assignedToId));
+        if (emp) assignedEmps = [emp];
+      } else if (body.assignedToName) {
+        const emp = employees.find(e => e.fullName.toLowerCase() === String(body.assignedToName).toLowerCase());
+        if (emp) assignedEmps = [emp];
+      }
+
+      const todayStr = getLocalDateString();
+      const newTask = {
+        id: nextId,
+        customId: customId,
+        customTaskId: customId,
+        title: title,
+        description: body.description || body.notes || '',
+        startDate: body.startDate || todayStr,
+        dueDate: body.dueDate || body.endDate || todayStr,
+        endDate: body.endDate || body.dueDate || todayStr,
+        priority: priority,
+        severityWeight: severityWeight,
+        status: status,
+        department: department,
+        teamName: department,
+        thisWeekPlan: normalizedWeekPlan,
+        totalCompletedSoFar: normalizedCompleted,
+        assignedToIds: assignedEmps.map(e => e.id),
+        assignedToMembers: assignedEmps.map(e => ({ id: e.id, fullName: e.fullName, employeeCode: e.employeeCode })),
+        assignedToId: assignedEmps[0]?.id || null,
+        assignedToName: assignedEmps.map(e => e.fullName).join(', ') || null,
+        assignedToCode: assignedEmps.map(e => e.employeeCode).join(', ') || null,
+        impact: body.impact || null,
+        qualityRating: body.qualityRating !== undefined && body.qualityRating !== '' ? Number(body.qualityRating) : null,
+        authorizedBy: body.authorizedBy || null,
+        completionNote: body.completionNote || null,
+        createdAt: new Date().toISOString()
+      };
+
+      tasks.unshift(newTask);
+
+      broadcastStompMessage('/topic/admin/live-feed', {
+        id: String(Date.now()),
+        eventType: 'TASK_CREATED',
+        title: 'New Deliverable Added',
+        message: `Task '${title}' (${customId}) created manually for department '${department}'.`,
+        employeeName: requester.fullName || 'Admin',
+        severity: priority === 'CRITICAL' ? 'CRITICAL' : priority === 'HIGH' ? 'WARNING' : 'INFO',
+        timestamp: new Date().toISOString()
+      });
+
+      broadcastStompMessage('/topic/tasks/updates', { action: 'RELOAD', taskId: newTask.id });
+
+      json({ success: true, task: newTask });
+    });
+    return;
+  }
+
   // Messages: Get Messages for Admin or Employee
   if (pathname === '/api/messages' && req.method === 'GET') {
     const requester = getRequester();
@@ -1403,6 +1524,127 @@ const server = http.createServer((req, res) => {
       return;
     }
     json(tasks);
+    return;
+  }
+
+  // Tasks: Create New Deliverable Task Manually (Full Template Columns)
+  if (pathname === '/api/tasks' && req.method === 'POST') {
+    const requester = getRequester();
+    if (!requester || (requester.role !== 'ADMIN' && requester.role !== 'MANAGER')) {
+      json({ error: "Access Denied: Only administrators or managers can create tasks." }, 403);
+      return;
+    }
+
+    readBody(body => {
+      const title = (body.title || '').trim();
+      if (!title) {
+        json({ error: "Deliverable task title is required." }, 400);
+        return;
+      }
+
+      const nextId = tasks.length > 0 ? Math.max(...tasks.map(t => typeof t.id === 'number' ? t.id : 0)) + 1 : 1;
+      const customId = (body.customId || body.customTaskId || `A-${String(nextId).padStart(2, '0')}`).trim();
+      const department = (body.department || body.teamName || 'Development').trim();
+
+      // Ensure department exists in teams registry
+      if (department && !teams.some(t => t.teamName.toLowerCase() === department.toLowerCase())) {
+        teams.push({
+          id: teams.length + 1,
+          teamName: department,
+          teamNameAm: department,
+          teamNameTi: department,
+          teamNameOm: department,
+          description: `Action plan team for ${department}`
+        });
+      }
+
+      // Priority and severity weight
+      let priority = (body.priority || 'MEDIUM').toUpperCase();
+      let severityWeight = parseInt(body.severityWeight);
+      if (isNaN(severityWeight)) {
+        if (priority === 'CRITICAL') severityWeight = 4;
+        else if (priority === 'HIGH') severityWeight = 3;
+        else if (priority === 'LOW') severityWeight = 1;
+        else severityWeight = 2;
+      }
+
+      // Format percentages cleanly
+      let rawWeekPlan = body.thisWeekPlan !== undefined ? String(body.thisWeekPlan).trim() : '';
+      let rawCompleted = body.totalCompletedSoFar !== undefined ? String(body.totalCompletedSoFar).trim() : '';
+      let status = (body.status || 'PENDING').toUpperCase();
+
+      const planNum = parseFloat(rawWeekPlan);
+      const normalizedWeekPlan = (!isNaN(planNum) && planNum <= 1 && planNum > 0 && !rawWeekPlan.includes('%'))
+        ? `${Math.round(planNum * 100)}%`
+        : (rawWeekPlan ? `${rawWeekPlan}${rawWeekPlan.includes('%') ? '' : '%'}` : '0%');
+
+      const compNum = parseFloat(rawCompleted);
+      const normalizedCompleted = (!isNaN(compNum) && compNum <= 1 && compNum > 0 && !rawCompleted.includes('%'))
+        ? `${Math.round(compNum * 100)}%`
+        : (rawCompleted ? `${rawCompleted}${rawCompleted.includes('%') ? '' : '%'}` : (status === 'COMPLETED' ? '100%' : '0%'));
+
+      // If marked completed or 100%, update status
+      if (status === 'COMPLETED' && (!rawCompleted || normalizedCompleted === '0%')) {
+        // completed
+      }
+
+      // Resolve assigned employees
+      let assignedEmps = [];
+      if (Array.isArray(body.assignedToIds) && body.assignedToIds.length > 0) {
+        assignedEmps = employees.filter(e => body.assignedToIds.map(Number).includes(e.id));
+      } else if (body.assignedToId) {
+        const emp = employees.find(e => e.id === parseInt(body.assignedToId));
+        if (emp) assignedEmps = [emp];
+      } else if (body.assignedToName) {
+        const emp = employees.find(e => e.fullName.toLowerCase() === String(body.assignedToName).toLowerCase());
+        if (emp) assignedEmps = [emp];
+      }
+
+      const todayStr = getLocalDateString();
+      const newTask = {
+        id: nextId,
+        customId: customId,
+        customTaskId: customId,
+        title: title,
+        description: body.description || body.notes || '',
+        startDate: body.startDate || todayStr,
+        dueDate: body.dueDate || body.endDate || todayStr,
+        endDate: body.endDate || body.dueDate || todayStr,
+        priority: priority,
+        severityWeight: severityWeight,
+        status: status,
+        department: department,
+        teamName: department,
+        thisWeekPlan: normalizedWeekPlan,
+        totalCompletedSoFar: normalizedCompleted,
+        assignedToIds: assignedEmps.map(e => e.id),
+        assignedToMembers: assignedEmps.map(e => ({ id: e.id, fullName: e.fullName, employeeCode: e.employeeCode })),
+        assignedToId: assignedEmps[0]?.id || null,
+        assignedToName: assignedEmps.map(e => e.fullName).join(', ') || null,
+        assignedToCode: assignedEmps.map(e => e.employeeCode).join(', ') || null,
+        impact: body.impact || null,
+        qualityRating: body.qualityRating !== undefined && body.qualityRating !== '' ? Number(body.qualityRating) : null,
+        authorizedBy: body.authorizedBy || null,
+        completionNote: body.completionNote || null,
+        createdAt: new Date().toISOString()
+      };
+
+      tasks.unshift(newTask);
+
+      broadcastStompMessage('/topic/admin/live-feed', {
+        id: String(Date.now()),
+        eventType: 'TASK_CREATED',
+        title: 'New Deliverable Added',
+        message: `Task '${title}' (${customId}) created manually for department '${department}'.`,
+        employeeName: requester.fullName || 'Admin',
+        severity: priority === 'CRITICAL' ? 'CRITICAL' : priority === 'HIGH' ? 'WARNING' : 'INFO',
+        timestamp: new Date().toISOString()
+      });
+
+      broadcastStompMessage('/topic/tasks/updates', { action: 'RELOAD', taskId: newTask.id });
+
+      json({ success: true, task: newTask });
+    });
     return;
   }
 
@@ -1679,22 +1921,26 @@ const server = http.createServer((req, res) => {
     }
 
     const rows = [
-      ['Task ID', 'Deliverable Title', 'Department', 'Start Date', 'End Date', 'Status', 'Completed By', 'Authorized By', 'Quality Rating (1-10)', 'Completion Note', 'Authorization Note']
+      ['S.No', 'Tasks', 'Department', 'Start Date', 'End Date', 'This Week Plan', 'Status', 'Total Completed So Far', 'Assigned To', 'Priority', 'Severity Weight', 'Quality Rating (1-10)', 'Authorized By', 'Completion Note', 'Description / Next Steps']
     ];
 
     exportList.forEach((t, idx) => {
       rows.push([
-        t.customTaskId || String(t.id),
+        t.customTaskId || t.customId || String(t.id),
         t.title || '',
-        t.teamName || 'General',
+        t.department || t.teamName || 'General',
         t.startDate || '',
         t.endDate || t.dueDate || '',
+        t.thisWeekPlan || '',
         t.status || 'PENDING',
+        t.totalCompletedSoFar || (t.status === 'COMPLETED' ? '100%' : '0%'),
         t.assignedToName || t.submittedByName || '',
+        t.priority || 'MEDIUM',
+        String(t.severityWeight || 2),
+        t.qualityRating !== undefined && t.qualityRating !== null ? String(t.qualityRating) : '',
         t.authorizedBy || '',
-        t.qualityRating !== undefined ? String(t.qualityRating) : '',
         t.completionNote || '',
-        t.authorizationNote || ''
+        t.description || ''
       ]);
     });
 

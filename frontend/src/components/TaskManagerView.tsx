@@ -28,7 +28,9 @@ import {
   Send,
   Trash2,
   ShieldCheck,
-  Award
+  Award,
+  PlusCircle,
+  Plus
 } from 'lucide-react';
 import { TaskAssignmentCombobox } from './TaskAssignmentCombobox';
 
@@ -118,6 +120,107 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
 
   // Export State
   const [exportingTasks, setExportingTasks] = useState<boolean>(false);
+
+  // Manual Task Creation State (Full Template Columns)
+  const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [taskFormCustomId, setTaskFormCustomId] = useState('');
+  const [taskFormTitle, setTaskFormTitle] = useState('');
+  const [taskFormDept, setTaskFormDept] = useState('Development');
+  const [taskFormCustomDept, setTaskFormCustomDept] = useState('');
+  const [taskFormStartDate, setTaskFormStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [taskFormDueDate, setTaskFormDueDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 5);
+    return d.toISOString().split('T')[0];
+  });
+  const [taskFormWeekPlan, setTaskFormWeekPlan] = useState('100%');
+  const [taskFormCompletedSoFar, setTaskFormCompletedSoFar] = useState('0%');
+  const [taskFormStatus, setTaskFormStatus] = useState<'PENDING' | 'IN_PROGRESS' | 'COMPLETED'>('PENDING');
+  const [taskFormPriority, setTaskFormPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM');
+  const [taskFormAssignedId, setTaskFormAssignedId] = useState<string>('');
+  const [taskFormImpact, setTaskFormImpact] = useState('');
+  const [taskFormDescription, setTaskFormDescription] = useState('');
+  const [creatingTask, setCreatingTask] = useState(false);
+  const [availableStaff, setAvailableStaff] = useState<any[]>([]);
+
+  // Fetch live staff for assignment dropdown
+  useEffect(() => {
+    fetch('/api/attendance/live-status', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setAvailableStaff(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [token, refreshTrigger]);
+
+  const handleOpenAddTaskModal = () => {
+    const nextSeq = tasks.length + 1;
+    setTaskFormCustomId(`A-${String(nextSeq).padStart(2, '0')}`);
+    setTaskFormTitle('');
+    setTaskFormDept(availableDepts[0] || 'Development');
+    setTaskFormCustomDept('');
+    setTaskFormStartDate(new Date().toISOString().split('T')[0]);
+    const d = new Date();
+    d.setDate(d.getDate() + 5);
+    setTaskFormDueDate(d.toISOString().split('T')[0]);
+    setTaskFormWeekPlan('100%');
+    setTaskFormCompletedSoFar('0%');
+    setTaskFormStatus('PENDING');
+    setTaskFormPriority('MEDIUM');
+    setTaskFormAssignedId('');
+    setTaskFormImpact('');
+    setTaskFormDescription('');
+    setShowAddTaskModal(true);
+  };
+
+  const handleCreateTaskManually = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!taskFormTitle.trim()) {
+      alert("Please enter a deliverable task title.");
+      return;
+    }
+
+    setCreatingTask(true);
+    try {
+      const resolvedDept = taskFormDept === '__NEW__' ? (taskFormCustomDept.trim() || 'General') : taskFormDept;
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          customId: taskFormCustomId.trim() || `A-${String(tasks.length + 1).padStart(2, '0')}`,
+          title: taskFormTitle.trim(),
+          department: resolvedDept,
+          teamName: resolvedDept,
+          startDate: taskFormStartDate,
+          dueDate: taskFormDueDate,
+          endDate: taskFormDueDate,
+          thisWeekPlan: taskFormWeekPlan,
+          totalCompletedSoFar: taskFormCompletedSoFar,
+          status: taskFormStatus,
+          priority: taskFormPriority,
+          assignedToId: taskFormAssignedId ? parseInt(taskFormAssignedId) : null,
+          impact: taskFormImpact.trim() || null,
+          description: taskFormDescription.trim() || null
+        })
+      });
+
+      if (res.ok) {
+        setShowAddTaskModal(false);
+        onTaskUpdated();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to create task.");
+      }
+    } catch (err) {
+      console.error("Create task error", err);
+      alert("Network error while creating task.");
+    } finally {
+      setCreatingTask(false);
+    }
+  };
 
   // Upload Action Plan Modal State
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -437,11 +540,11 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
     }
   };
 
-  // Export Tasks to Excel
-  const handleExportTasks = async (scope: string = 'ALL') => {
+  // Export Tasks to Excel (.xlsx) or CSV
+  const handleExportTasks = async (scope: string = 'ALL', format: 'xlsx' | 'csv' = 'xlsx') => {
     setExportingTasks(true);
     try {
-      const res = await fetch(`/api/tasks/export?format=xlsx&status=${scope}`, {
+      const res = await fetch(`/api/tasks/export?format=${format}&status=${scope}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -449,13 +552,13 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `office_tasks_${scope.toLowerCase()}_export.xlsx`;
+        a.download = `office_action_tasks_${scope.toLowerCase()}_export.${format}`;
         document.body.appendChild(a);
         a.click();
         a.remove();
         window.URL.revokeObjectURL(url);
       } else {
-        alert("Failed to export tasks to Excel.");
+        alert(`Failed to export tasks to ${format.toUpperCase()}.`);
       }
     } catch (e) {
       console.error("Export error", e);
@@ -811,14 +914,35 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
           {!isEmployee && (
             <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
               <button
-                onClick={() => handleExportTasks(activeTab === 'COMPLETED' ? 'COMPLETED' : activeTab === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : 'ALL')}
-                disabled={exportingTasks}
-                className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition cursor-pointer shadow-sm"
-                title="Export deliverables to Excel (.xlsx)"
+                onClick={handleOpenAddTaskModal}
+                className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm shadow-blue-600/30 transition cursor-pointer"
+                title="Create a new deliverable task manually with full template schema"
               >
-                <Download className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{exportingTasks ? 'Exporting...' : 'Export Excel'}</span>
+                <PlusCircle className="w-3.5 h-3.5" />
+                <span>+ Add Task Manually</span>
               </button>
+
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={() => handleExportTasks(activeTab === 'COMPLETED' ? 'COMPLETED' : activeTab === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : 'ALL', 'xlsx')}
+                  disabled={exportingTasks}
+                  className="flex items-center space-x-1.5 px-3 py-2 rounded-l-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition cursor-pointer shadow-sm"
+                  title="Export deliverables to Excel (.xlsx) with all template columns"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{exportingTasks ? 'Exporting...' : 'Export Excel'}</span>
+                </button>
+                <button
+                  onClick={() => handleExportTasks(activeTab === 'COMPLETED' ? 'COMPLETED' : activeTab === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : 'ALL', 'csv')}
+                  disabled={exportingTasks}
+                  className="flex items-center space-x-1 px-2.5 py-2 rounded-r-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-y border-r border-emerald-200 text-xs font-bold transition cursor-pointer shadow-sm"
+                  title="Export to CSV (.csv)"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>CSV</span>
+                </button>
+              </div>
+
               {tasks.length > 0 && (
                 <button
                   onClick={handleClearAllTasks}
@@ -826,15 +950,16 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                   title="Wipe all deliverables to start with a clean slate"
                 >
                   <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                  <span>Clear All Deliverables</span>
+                  <span>Clear All</span>
                 </button>
               )}
+
               <button
                 onClick={() => setShowUploadModal(true)}
-                className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm shadow-blue-600/30 transition cursor-pointer"
+                className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs font-bold transition cursor-pointer shadow-sm"
               >
-                <Upload className="w-3.5 h-3.5" />
-                <span>{t('uploadPlan') || 'Upload Action Plan'}</span>
+                <Upload className="w-3.5 h-3.5 text-slate-600" />
+                <span>{t('uploadPlan') || 'Upload Plan (.xlsx)'}</span>
               </button>
             </div>
           )}
@@ -893,14 +1018,25 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
           </div>
 
           {/* Quick Download Tab Tasks */}
-          <button
-            onClick={() => handleExportTasks(activeTab === 'COMPLETED' ? 'COMPLETED' : activeTab === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : 'ALL')}
-            disabled={exportingTasks}
-            className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 text-xs font-bold transition cursor-pointer shadow-sm"
-          >
-            <Download className="w-3.5 h-3.5 text-blue-600" />
-            <span>{activeTab === 'COMPLETED' ? 'Export Completed' : 'Export Tab'}</span>
-          </button>
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={() => handleExportTasks(activeTab === 'COMPLETED' ? 'COMPLETED' : activeTab === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : 'ALL', 'xlsx')}
+              disabled={exportingTasks}
+              className="flex items-center space-x-1.5 px-3 py-1 rounded-l-lg bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 text-xs font-bold transition cursor-pointer shadow-sm"
+              title="Export current tab to Excel (.xlsx)"
+            >
+              <Download className="w-3.5 h-3.5 text-blue-600" />
+              <span>{activeTab === 'COMPLETED' ? 'Export Completed' : 'Export Tab'}</span>
+            </button>
+            <button
+              onClick={() => handleExportTasks(activeTab === 'COMPLETED' ? 'COMPLETED' : activeTab === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : 'ALL', 'csv')}
+              disabled={exportingTasks}
+              className="px-2 py-1 rounded-r-lg bg-white border-y border-r border-blue-200 text-blue-700 hover:bg-blue-50 text-[11px] font-bold transition cursor-pointer shadow-sm"
+              title="Export current tab to CSV"
+            >
+              CSV
+            </button>
+          </div>
         </div>
 
         {/* Filter Controls Row */}
@@ -1993,6 +2129,268 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                 <span>{submittingCompletion ? "Submitting..." : "Submit for Authorization"}</span>
               </button>
             </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ADD TASK MANUALLY MODAL (FULL TEMPLATE COLUMNS) */}
+      {!isEmployee && showAddTaskModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in">
+          <div className="bg-white border border-blue-100 rounded-2xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl space-y-4 my-8">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-blue-100">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-xl bg-blue-50 text-blue-600 border border-blue-200">
+                  <PlusCircle className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">New Action Plan Deliverable (Template Schema)</h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Manually register a deliverable matching the full master action plan template columns.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddTaskModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleCreateTaskManually} className="space-y-4">
+              
+              {/* Row 1: S.No + Department */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    S.No / Deliverable ID <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={taskFormCustomId}
+                    onChange={(e) => setTaskFormCustomId(e.target.value)}
+                    placeholder="e.g. 1.1, 2, A-01"
+                    className="w-full bg-slate-50 border border-blue-200 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Template Column: S.No</span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Department / Team <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={taskFormDept}
+                    onChange={(e) => setTaskFormDept(e.target.value)}
+                    className="w-full bg-slate-50 border border-blue-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+                  >
+                    {availableDepts.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                    <option value="__NEW__">+ New Department...</option>
+                  </select>
+                  {taskFormDept === '__NEW__' && (
+                    <input
+                      type="text"
+                      required
+                      value={taskFormCustomDept}
+                      onChange={(e) => setTaskFormCustomDept(e.target.value)}
+                      placeholder="Enter new department name..."
+                      className="mt-1.5 w-full bg-white border border-blue-400 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600"
+                    />
+                  )}
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Template Column: Department</span>
+                </div>
+              </div>
+
+              {/* Row 2: Deliverable Tasks Title */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Tasks / Deliverable Title <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  value={taskFormTitle}
+                  onChange={(e) => setTaskFormTitle(e.target.value)}
+                  placeholder="e.g. Prepare the test case for 3rd party integration and interface of the bank software..."
+                  className="w-full bg-slate-50 border border-blue-200 rounded-lg p-2.5 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition leading-relaxed"
+                />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">Template Column: Tasks</span>
+              </div>
+
+              {/* Row 3: Start Date & End Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Start Date <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={taskFormStartDate}
+                    onChange={(e) => setTaskFormStartDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-blue-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Template Column: Start Date</span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    End Date (Due Date) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={taskFormDueDate}
+                    onChange={(e) => setTaskFormDueDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-blue-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Template Column: End Date</span>
+                </div>
+              </div>
+
+              {/* Row 4: This Week Plan + Status + Total Completed So Far */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    This Week Plan
+                  </label>
+                  <input
+                    type="text"
+                    value={taskFormWeekPlan}
+                    onChange={(e) => setTaskFormWeekPlan(e.target.value)}
+                    placeholder="e.g. 10%, 50%, 1.0"
+                    className="w-full bg-slate-50 border border-blue-200 rounded-lg px-3 py-2 text-xs font-mono font-bold text-blue-700 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Template Column: This Week Plan</span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Status
+                  </label>
+                  <select
+                    value={taskFormStatus}
+                    onChange={(e) => setTaskFormStatus(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-blue-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+                  >
+                    <option value="PENDING">⏳ PENDING (Not Started)</option>
+                    <option value="IN_PROGRESS">⚡ IN_PROGRESS (Active)</option>
+                    <option value="COMPLETED">✅ COMPLETED</option>
+                  </select>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Template Column: Status</span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Total Completed So Far
+                  </label>
+                  <input
+                    type="text"
+                    value={taskFormCompletedSoFar}
+                    onChange={(e) => setTaskFormCompletedSoFar(e.target.value)}
+                    placeholder="e.g. 0%, 88%, 100%"
+                    className="w-full bg-slate-50 border border-blue-200 rounded-lg px-3 py-2 text-xs font-mono font-bold text-emerald-700 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Template Column: Total Completed So Far</span>
+                </div>
+              </div>
+
+              {/* Row 5: Priority & Assigned Staff */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Priority / Severity Weight
+                  </label>
+                  <select
+                    value={taskFormPriority}
+                    onChange={(e) => setTaskFormPriority(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-blue-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+                  >
+                    <option value="CRITICAL">🔴 CRITICAL (4x Weight)</option>
+                    <option value="HIGH">🟠 HIGH (3x Weight)</option>
+                    <option value="MEDIUM">🔵 MEDIUM (2x Weight)</option>
+                    <option value="LOW">⚪ LOW (1x Weight)</option>
+                  </select>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Weights calculate leaderboard & completion rates</span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Assign Staff Member
+                  </label>
+                  <select
+                    value={taskFormAssignedId}
+                    onChange={(e) => setTaskFormAssignedId(e.target.value)}
+                    className="w-full bg-slate-50 border border-blue-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+                  >
+                    <option value="">-- Unassigned (Department Pool) --</option>
+                    {availableStaff.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.fullName} ({emp.employeeCode}) {emp.status === 'ABSENT' ? '🔴 Absent' : '🟢 Present'}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Template Column: Assigned Staff / Owner</span>
+                </div>
+              </div>
+
+              {/* Row 6: Status / Impact Notes */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Status / Interface Impact Notes (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={taskFormImpact}
+                  onChange={(e) => setTaskFormImpact(e.target.value)}
+                  placeholder="e.g. 190+ 3rd party integration and interface of bank software"
+                  className="w-full bg-slate-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+                />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">Template Column: Impact / Status Description</span>
+              </div>
+
+              {/* Row 7: Description / Next Steps */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Description / Mitigation / Next Steps (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={taskFormDescription}
+                  onChange={(e) => setTaskFormDescription(e.target.value)}
+                  placeholder="Optional details, instructions, acceptance criteria, or mitigation plans..."
+                  className="w-full bg-slate-50 border border-blue-200 rounded-lg p-2.5 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition leading-relaxed"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddTaskModal(false)}
+                  className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingTask}
+                  className="flex items-center space-x-1.5 px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/30 transition cursor-pointer"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>{creatingTask ? "Creating Deliverable..." : "Create Deliverable Task"}</span>
+                </button>
+              </div>
+
+            </form>
 
           </div>
         </div>

@@ -145,3 +145,4 @@ export const OfficeActionLogo: React.FC<OfficeActionLogoProps> = ({
     </svg>
   );
 };
+
