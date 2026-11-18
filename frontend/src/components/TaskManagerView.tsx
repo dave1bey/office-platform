@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Upload,
@@ -43,6 +43,8 @@ interface TaskMember {
 interface TaskItem {
   id: number;
   customTaskId?: string;
+  customId?: string;
+  department?: string;
   actionPlanId: number;
   actionPlanTitle: string;
   title: string;
@@ -121,11 +123,58 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
   // Export State
   const [exportingTasks, setExportingTasks] = useState<boolean>(false);
 
+  // Dynamic System Groups/Teams State (fetched from backend /api/teams)
+  const [systemTeams, setSystemTeams] = useState<any[]>([]);
+
+  // Fetch actual created groups/teams from /api/teams
+  useEffect(() => {
+    fetch('/api/teams', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) setSystemTeams(data);
+      })
+      .catch(err => console.error('Failed to load teams:', err));
+  }, [token, refreshTrigger]);
+
+  // Available Departments dynamically derived from actual created groups (systemTeams) and tasks
+  const availableDepts = useMemo(() => {
+    const list: string[] = [];
+    systemTeams.forEach(t => {
+      const name = t.teamName || t.name;
+      if (name && !list.includes(name)) list.push(name);
+    });
+    tasks.forEach(t => {
+      const d = t.teamName || t.department;
+      if (d && !list.includes(d)) list.push(d);
+    });
+    if (list.length === 0) list.push('General');
+    return list;
+  }, [systemTeams, tasks]);
+
+  // Sequential CBS Task ID generator starting with CBS as default prefix
+  const generateNextCbsId = () => {
+    let maxCbsNum = 0;
+    if (Array.isArray(tasks)) {
+      tasks.forEach(t => {
+        const idStr = String(t.customTaskId || t.customId || '');
+        const match = idStr.match(/CBS[^\d]*(\d+)/i);
+        if (match) {
+          const num = parseInt(match[1]);
+          if (!isNaN(num) && num > maxCbsNum) maxCbsNum = num;
+        }
+      });
+    }
+    const nextNum = maxCbsNum > 0 ? maxCbsNum + 1 : (tasks && tasks.length > 0 ? tasks.length + 1 : 1);
+    return `CBS-${String(nextNum).padStart(2, '0')}`;
+  };
+
   // Manual Task Creation State (Full Template Columns)
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [taskFormCustomId, setTaskFormCustomId] = useState('');
   const [taskFormTitle, setTaskFormTitle] = useState('');
-  const [taskFormDept, setTaskFormDept] = useState('Development');
+  const [taskFormDept, setTaskFormDept] = useState('');
   const [taskFormCustomDept, setTaskFormCustomDept] = useState('');
   const [taskFormStartDate, setTaskFormStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [taskFormDueDate, setTaskFormDueDate] = useState(() => {
@@ -154,10 +203,9 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
   }, [token, refreshTrigger]);
 
   const handleOpenAddTaskModal = () => {
-    const nextSeq = tasks.length + 1;
-    setTaskFormCustomId(`A-${String(nextSeq).padStart(2, '0')}`);
+    setTaskFormCustomId(generateNextCbsId());
     setTaskFormTitle('');
-    setTaskFormDept(availableDepts[0] || 'Development');
+    setTaskFormDept(availableDepts[0] || 'General');
     setTaskFormCustomDept('');
     setTaskFormStartDate(new Date().toISOString().split('T')[0]);
     const d = new Date();
@@ -224,11 +272,18 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
 
   // Upload Action Plan Modal State
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploadDept, setUploadDept] = useState<string>('Development');
+  const [uploadDept, setUploadDept] = useState<string>('');
   const [planTitle, setPlanTitle] = useState<string>('ModelBank Migration & DLM Cycles');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<any | null>(null);
+
+  // Sync uploadDept when availableDepts changes
+  useEffect(() => {
+    if (availableDepts.length > 0 && (!uploadDept || !availableDepts.includes(uploadDept))) {
+      setUploadDept(availableDepts[0]);
+    }
+  }, [availableDepts, uploadDept]);
 
   // Legacy completion note dialog state (Admin quick override)
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
@@ -335,7 +390,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
   };
 
   const isEmployee = currentUser?.role === 'EMPLOYEE';
-  const employeeDept = (currentUser?.teams && currentUser.teams[0]) || 'Development';
+  const employeeDept = (currentUser?.teams && currentUser.teams[0]) || availableDepts[0] || 'General';
 
   const fetchTasks = async () => {
     try {
@@ -678,15 +733,6 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
     ? Math.round((deptCompletedWeight / deptTotalWeight) * 1000) / 10
     : (deptTotalTasks > 0 ? Math.round((deptCompletedTasks / deptTotalTasks) * 1000) / 10 : 0);
 
-  // Available Departments
-  const availableDepts = Array.from(
-    new Set([
-      'Development',
-      'Quality Assurance',
-      'Operations',
-      ...(tasks.map(t => t.teamName).filter(Boolean) as string[])
-    ])
-  );
 
   // Main Tab Counts
   const pendingApprovalCount = tasks.filter(t => t.status === 'PENDING_APPROVAL').length;
@@ -1637,9 +1683,15 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                   onChange={(e) => setUploadDept(e.target.value)}
                   className="w-full bg-slate-50 border border-blue-200 rounded-lg p-2.5 text-xs text-slate-800 font-bold focus:bg-white focus:outline-none focus:border-blue-600 transition"
                 >
-                  <option value="Development">Development (የልማት ቡድን)</option>
-                  <option value="Quality Assurance">Quality Assurance (የጥራት ማረጋገጫ)</option>
-                  <option value="Operations">Operations (ኦፕሬሽን)</option>
+                  {availableDepts.map(d => {
+                    const matchTeam = systemTeams.find(t => t.teamName === d);
+                    const label = matchTeam?.teamNameAm && matchTeam.teamNameAm !== d
+                      ? `${d} (${matchTeam.teamNameAm})`
+                      : d;
+                    return (
+                      <option key={d} value={d}>{label}</option>
+                    );
+                  })}
                 </select>
                 <p className="text-[11px] text-slate-500 mt-1">
                   All tasks from this plan and any newly auto-created staff will be assigned to this department.
@@ -2175,7 +2227,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                     required
                     value={taskFormCustomId}
                     onChange={(e) => setTaskFormCustomId(e.target.value)}
-                    placeholder="e.g. 1.1, 2, A-01"
+                    placeholder="e.g. CBS-01, CBS-02, 1.1"
                     className="w-full bg-slate-50 border border-blue-200 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
                   />
                   <span className="text-[10px] text-slate-400 mt-0.5 block">Template Column: S.No</span>
@@ -2190,9 +2242,15 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                     onChange={(e) => setTaskFormDept(e.target.value)}
                     className="w-full bg-slate-50 border border-blue-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
                   >
-                    {availableDepts.map(d => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
+                    {availableDepts.map(d => {
+                      const matchTeam = systemTeams.find(t => t.teamName === d);
+                      const label = matchTeam?.teamNameAm && matchTeam.teamNameAm !== d
+                        ? `${d} (${matchTeam.teamNameAm})`
+                        : d;
+                      return (
+                        <option key={d} value={d}>{label}</option>
+                      );
+                    })}
                     <option value="__NEW__">+ New Department...</option>
                   </select>
                   {taskFormDept === '__NEW__' && (

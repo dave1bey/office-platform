@@ -36,6 +36,28 @@ const teams = [
   { id: 3, teamName: "Operations", teamNameAm: "ኦፕሬሽን", teamNameTi: "ኦፕሬሽን", teamNameOm: "Hojii Gaggeessituu" }
 ];
 
+// Helper to get fallback default department from existing teams
+function getDefaultDepartment() {
+  return teams.length > 0 && teams[0].teamName ? teams[0].teamName : 'General';
+}
+
+// Sequential auto-generator for CBS Task IDs (default prefix CBS as requested)
+function generateNextCbsId() {
+  let maxCbsNum = 0;
+  if (Array.isArray(tasks)) {
+    tasks.forEach(t => {
+      const idStr = String(t.customTaskId || t.customId || '');
+      const match = idStr.match(/CBS[^\d]*(\d+)/i);
+      if (match) {
+        const num = parseInt(match[1]);
+        if (!isNaN(num) && num > maxCbsNum) maxCbsNum = num;
+      }
+    });
+  }
+  const nextNum = maxCbsNum > 0 ? maxCbsNum + 1 : (tasks && tasks.length > 0 ? tasks.length + 1 : 1);
+  return `CBS-${String(nextNum).padStart(2, '0')}`;
+}
+
 const employees = [
   { id: 1, employeeCode: "EMP-001", fullName: "Admin User", email: "admin@office.lan", password: "password123", role: "ADMIN", preferredLang: "en", teams: ["Development"] },
   { id: 2, employeeCode: "EMP-002", fullName: "Abebe Bikila", email: "abebe@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "am", teams: ["Development"] },
@@ -1317,8 +1339,8 @@ const server = http.createServer((req, res) => {
       }
 
       const nextId = tasks.length > 0 ? Math.max(...tasks.map(t => typeof t.id === 'number' ? t.id : 0)) + 1 : 1;
-      const customId = (body.customId || body.customTaskId || `A-${String(nextId).padStart(2, '0')}`).trim();
-      const department = (body.department || body.teamName || 'Development').trim();
+      const customId = (body.customId || body.customTaskId || generateNextCbsId()).trim();
+      const department = (body.department || body.teamName || getDefaultDepartment()).trim();
 
       // Ensure department exists in teams registry
       if (department && !teams.some(t => t.teamName.toLowerCase() === department.toLowerCase())) {
@@ -1543,8 +1565,8 @@ const server = http.createServer((req, res) => {
       }
 
       const nextId = tasks.length > 0 ? Math.max(...tasks.map(t => typeof t.id === 'number' ? t.id : 0)) + 1 : 1;
-      const customId = (body.customId || body.customTaskId || `A-${String(nextId).padStart(2, '0')}`).trim();
-      const department = (body.department || body.teamName || 'Development').trim();
+      const customId = (body.customId || body.customTaskId || generateNextCbsId()).trim();
+      const department = (body.department || body.teamName || getDefaultDepartment()).trim();
 
       // Ensure department exists in teams registry
       if (department && !teams.some(t => t.teamName.toLowerCase() === department.toLowerCase())) {
@@ -2408,7 +2430,7 @@ const server = http.createServer((req, res) => {
     req.on('data', chunk => chunks.push(chunk));
     req.on('end', () => {
       const buffer = Buffer.concat(chunks);
-      let department = (parsedUrl.query && parsedUrl.query.department) || "Development";
+      let department = (parsedUrl.query && parsedUrl.query.department) || getDefaultDepartment();
       let planTitle = (parsedUrl.query && parsedUrl.query.planTitle) || "Imported Action Plan";
       let rawRows = [];
 
@@ -2545,7 +2567,7 @@ const server = http.createServer((req, res) => {
       if (sheetDefaultEnd === today && sheetDefaultStart !== today) sheetDefaultEnd = sheetDefaultStart;
 
       dataRows.forEach((row, idx) => {
-        let customId = (row[colMap.id] || `A-0${idx + 1}`).trim();
+        let customId = (row[colMap.id] || `CBS-${String(idx + 1).padStart(2, '0')}`).trim();
         // Clean floating point formatting e.g. "1.1000000000000001" -> "1.1"
         if (/^\d+\.\d+$/.test(customId)) {
           const flt = parseFloat(customId);
@@ -3066,7 +3088,7 @@ const server = http.createServer((req, res) => {
       return true;
     };
 
-    const deptName = requester.teams && requester.teams[0] || 'Development';
+    const deptName = requester.teams && requester.teams[0] || getDefaultDepartment();
     const deptTasks = tasks.filter(t => t.teamName === deptName && filterTask(t));
     const deptTotalTasks = deptTasks.length;
     const deptCompletedTasks = deptTasks.filter(t => t.status === 'COMPLETED').length;
