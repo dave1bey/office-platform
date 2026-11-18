@@ -2224,14 +2224,27 @@ const server = http.createServer((req, res) => {
     // If already YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
-    // DD/MM/YYYY or DD-MM-YYYY format (e.g. 09-11-2026 or 09/11/2026)
-    const ddmmyyyy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    // DD/MM/YYYY, DD-MM-YYYY, or DD-MM-YY (e.g. 17-11-26, 21-11-2026, 09/11/26)
+    const ddmmyyyy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
     if (ddmmyyyy) {
       const p1 = parseInt(ddmmyyyy[1], 10);
       const p2 = parseInt(ddmmyyyy[2], 10);
-      const yr = ddmmyyyy[3];
+      let yr = ddmmyyyy[3];
+      if (yr.length === 2) yr = '20' + yr;
       if (p1 <= 31 && p2 <= 12) {
         return `${yr}-${String(p2).padStart(2, '0')}-${String(p1).padStart(2, '0')}`;
+      }
+    }
+
+    // YY-MM-DD (e.g. 26-11-17)
+    const yymmdd = s.match(/^(\d{2,4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if (yymmdd) {
+      let yr = yymmdd[1];
+      if (yr.length === 2) yr = '20' + yr;
+      const m = parseInt(yymmdd[2], 10);
+      const d = parseInt(yymmdd[3], 10);
+      if (m <= 12 && d <= 31) {
+        return `${yr}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       }
     }
 

@@ -1,8 +1,23 @@
-S.No,Tasks ,Start Date,End Date,This Week Plan,Status ,Total Completed
-,,,,,,So Far
-1,Prepare the test case for 3rd party integration and interface of the bank software ,,,,,
-1.1,"Understand the functionality and purpose of each integration, then create test cases for each third-party system and bank application integrated with the CBS.",2026-11-09,2026-11-14,10,190+ 3rd party integration and interface ,88
-2,Familiarization Training (Main Bank),2026-11-09,2026-11-14,0.05,,0.95
-3,Environment Preparation (Main Bank),2026-10-09,2026-11-14,0.01,,0.11
-4,Familiarization Training (Subsidiaries Bank),2026-11-09,2026-11-14,0.05,,0.95
-5,Environment Preparation (Subsidiaries Bank),2026-11-09,2026-11-14,0.3,,0.45
+"S.No","Tasks","Start Date","End Date","This Week Plan","Status","Total Completed"
+"CBS-01","3rd party integration and interface transaction request from MIS-MB","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-02","Record the duration timeline taken for environment preparation for both instances","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-03","Collect the test cases from web team","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-04","Action plan for RODB preparation and availability","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-05","Project-to-project dependency item lists for ISPMO-VP","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-06","Follow the upgrade components such as Oracle, OS AIX etc.","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-07","Follow up and coordinate unauthorized transactions; find out exact number of records","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-08","Prepare 3rd party integration and interface test cases for subsidiaries bank","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-09","Draft proposal for architectural options to main bank","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-10","Identify the test cases that require COB (Close of Business)","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-11","Prepare proposal to establish the team for DLM process","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-12","Arrange and organize the office located at Floor 7 for INLAKS consultants","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-13","Follow and share project management plan components to IS quality team","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-14","Microservice BRD preparation underway smoothly","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-15","Select delivery access option: 1- VPN, 2- MAC whitelist","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-16","Call Kefelegn regarding moving PCs from their office to PMO","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-17","Propose Memo to Regional Director regarding unauthorized transaction management","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-18","Send reminder to respective divisions regarding reviewing shared test cases","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-19","Report preparation assignment to share with PM team (weekly and daily reports)","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-20","Temenos data scrambling for subsidiaries bank","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-21","Distribution and product code sharing, and reminder to Temenos","2026-11-17","2026-11-21","100%","PENDING","0%"
+"CBS-22","Notify team regarding weekly governance call","2026-11-17","2026-11-21","100%","PENDING","0%"
