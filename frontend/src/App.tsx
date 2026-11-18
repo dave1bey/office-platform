@@ -130,7 +130,7 @@ export const App: React.FC = () => {
   const token = user.token || localStorage.getItem('auth_token') || '';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-blue-100/40 text-slate-800 flex flex-col font-sans w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen flex flex-col font-sans w-full">
       {/* Top Navigation with Session Status */}
       <Navbar
         user={user}
@@ -156,7 +156,7 @@ export const App: React.FC = () => {
       <AbsenceAlertBanner alert={latestAlert} onDismiss={dismissLatestAlert} />
 
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex-1 w-full max-w-full overflow-x-hidden space-y-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex-1 w-full space-y-6">
         
         {/* Quick Mobile Check-in & Absence Filing Card */}
         <MobileAttendanceCard

@@ -299,6 +299,18 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
   const [absenceSubmitting, setAbsenceSubmitting] = useState(false);
   const [absenceSuccessNotice, setAbsenceSuccessNotice] = useState<string | null>(null);
 
+  // Prevent background page scrolling while any modal is open (so background does NOT scroll!)
+  useEffect(() => {
+    const isAnyModalOpen = showAddTaskModal || showUploadModal || Boolean(selectedTask) || showAbsenceModal || Boolean(taskToAuthorize) || Boolean(taskToSubmit);
+    if (isAnyModalOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [showAddTaskModal, showUploadModal, selectedTask, showAbsenceModal, taskToAuthorize, taskToSubmit]);
+
   const getAbsenceDaysCount = () => {
     if (!absenceStartDate || !absenceEndDate) return 1;
     const s = new Date(absenceStartDate);
@@ -1651,8 +1663,11 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
 
       {/* UPLOAD ACTION PLAN MODAL (WITH DEPARTMENT SELECTION & AUTO-PROVISIONING) */}
       {!isEmployee && showUploadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white border border-blue-100 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 text-slate-800">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowUploadModal(false); }}
+        >
+          <div className="bg-white border border-blue-100 rounded-2xl max-w-xl w-full max-h-[92vh] sm:max-h-[88vh] overflow-y-auto overscroll-contain p-5 sm:p-6 shadow-2xl space-y-5 animate-in zoom-in-95 text-slate-800" style={{ WebkitOverflowScrolling: 'touch' }}>
             <div className="flex items-center justify-between border-b border-blue-100 pb-3">
               <div>
                 <h3 className="text-lg font-bold text-slate-900 flex items-center space-x-2">
@@ -2188,18 +2203,21 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
 
       {/* ADD TASK MANUALLY MODAL (FULL TEMPLATE COLUMNS) */}
       {!isEmployee && showAddTaskModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in">
-          <div className="bg-white border border-blue-100 rounded-2xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl space-y-4 my-8">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowAddTaskModal(false); }}
+        >
+          <div className="bg-white border border-blue-100 rounded-2xl max-w-2xl w-full max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 my-auto">
             
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-blue-100">
+            {/* Modal Header (Fixed at top) */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-blue-100 shrink-0 bg-white">
               <div className="flex items-center space-x-2.5">
                 <div className="p-2 rounded-xl bg-blue-50 text-blue-600 border border-blue-200">
                   <PlusCircle className="w-5 h-5 text-blue-600" />
                 </div>
                 <div>
-                  <h3 className="font-black text-slate-900 text-base">New Action Plan Deliverable (Template Schema)</h3>
-                  <p className="text-xs text-slate-500 font-medium">
+                  <h3 className="font-black text-slate-900 text-sm sm:text-base">New Action Plan Deliverable (Template Schema)</h3>
+                  <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
                     Manually register a deliverable matching the full master action plan template columns.
                   </p>
                 </div>
@@ -2213,8 +2231,9 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
               </button>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleCreateTaskManually} className="space-y-4">
+            {/* Scrollable Form Body (Smooth touch scroll, isolated from background) */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 overscroll-contain space-y-4" style={{ WebkitOverflowScrolling: 'touch' }}>
+              <form id="create-manual-task-form" onSubmit={handleCreateTaskManually} className="space-y-4">
               
               {/* Row 1: S.No + Department */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2429,26 +2448,28 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                 />
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowAddTaskModal(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creatingTask}
-                  className="flex items-center space-x-1.5 px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/30 transition cursor-pointer"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  <span>{creatingTask ? "Creating Deliverable..." : "Create Deliverable Task"}</span>
-                </button>
-              </div>
+              </form>
+            </div>
 
-            </form>
+            {/* Modal Footer (Fixed at bottom, always accessible) */}
+            <div className="flex items-center justify-end space-x-2 p-3 sm:p-4 border-t border-slate-100 bg-slate-50/90 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowAddTaskModal(false)}
+                className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="create-manual-task-form"
+                disabled={creatingTask}
+                className="flex items-center space-x-1.5 px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/30 transition cursor-pointer disabled:opacity-50"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>{creatingTask ? "Creating Deliverable..." : "Create Deliverable Task"}</span>
+              </button>
+            </div>
 
           </div>
         </div>
