@@ -149,7 +149,6 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
       const d = t.teamName || t.department;
       if (d && !list.includes(d)) list.push(d);
     });
-    if (list.length === 0) list.push('General');
     return list;
   }, [systemTeams, tasks]);
 
@@ -205,7 +204,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
   const handleOpenAddTaskModal = () => {
     setTaskFormCustomId(generateNextCbsId());
     setTaskFormTitle('');
-    setTaskFormDept(availableDepts[0] || 'General');
+    setTaskFormDept(availableDepts.length > 0 ? availableDepts[0] : '__NEW__');
     setTaskFormCustomDept('');
     setTaskFormStartDate(new Date().toISOString().split('T')[0]);
     const d = new Date();
@@ -273,6 +272,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
   // Upload Action Plan Modal State
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadDept, setUploadDept] = useState<string>('');
+  const [uploadCustomDept, setUploadCustomDept] = useState<string>('');
   const [planTitle, setPlanTitle] = useState<string>('ModelBank Migration & DLM Cycles');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -280,8 +280,12 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
 
   // Sync uploadDept when availableDepts changes
   useEffect(() => {
-    if (availableDepts.length > 0 && (!uploadDept || !availableDepts.includes(uploadDept))) {
-      setUploadDept(availableDepts[0]);
+    if (availableDepts.length > 0) {
+      if (!uploadDept || (!availableDepts.includes(uploadDept) && uploadDept !== '__NEW__')) {
+        setUploadDept(availableDepts[0]);
+      }
+    } else {
+      setUploadDept('__NEW__');
     }
   }, [availableDepts, uploadDept]);
 
@@ -436,12 +440,13 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
       let headers: any = { Authorization: `Bearer ${token}` };
 
       const resolvedPlanTitle = planTitle || (selectedFile ? selectedFile.name.replace(/\.[^/.]+$/, '') : 'Core Banking Implementation');
+      const finalDept = (uploadDept === '__NEW__' || !uploadDept) ? (uploadCustomDept.trim() || 'General') : uploadDept;
 
       if (useSample || !selectedFile) {
         const sampleRes = await fetch('/api/action-plans/sample-data');
         const sampleData = await sampleRes.json();
         bodyData = JSON.stringify({
-          department: uploadDept,
+          department: finalDept,
           planTitle: resolvedPlanTitle,
           rawCsv: sampleData.rawCsv
         });
@@ -451,7 +456,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
         if (isCsv) {
           const text = await selectedFile.text();
           bodyData = JSON.stringify({
-            department: uploadDept,
+            department: finalDept,
             planTitle: resolvedPlanTitle,
             rawCsv: text
           });
@@ -462,7 +467,7 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
         }
       }
 
-      const queryParams = `?department=${encodeURIComponent(uploadDept)}&planTitle=${encodeURIComponent(resolvedPlanTitle)}`;
+      const queryParams = `?department=${encodeURIComponent(finalDept)}&planTitle=${encodeURIComponent(resolvedPlanTitle)}`;
       const res = await fetch(`/api/action-plans/upload${queryParams}`, {
         method: 'POST',
         headers,
@@ -1698,6 +1703,9 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                   onChange={(e) => setUploadDept(e.target.value)}
                   className="w-full bg-slate-50 border border-blue-200 rounded-lg p-2.5 text-xs text-slate-800 font-bold focus:bg-white focus:outline-none focus:border-blue-600 transition"
                 >
+                  {availableDepts.length === 0 && (
+                    <option value="__NEW__">+ Create New Department / Group...</option>
+                  )}
                   {availableDepts.map(d => {
                     const matchTeam = systemTeams.find(t => t.teamName === d);
                     const label = matchTeam?.teamNameAm && matchTeam.teamNameAm !== d
@@ -1707,7 +1715,19 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                       <option key={d} value={d}>{label}</option>
                     );
                   })}
+                  {availableDepts.length > 0 && (
+                    <option value="__NEW__">+ New Department...</option>
+                  )}
                 </select>
+                {(uploadDept === '__NEW__' || availableDepts.length === 0) && (
+                  <input
+                    type="text"
+                    value={uploadCustomDept}
+                    onChange={(e) => setUploadCustomDept(e.target.value)}
+                    placeholder="Enter department name for this action plan..."
+                    className="mt-1.5 w-full bg-white border border-blue-400 rounded-lg p-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                )}
                 <p className="text-[11px] text-slate-500 mt-1">
                   All tasks from this plan and any newly auto-created staff will be assigned to this department.
                 </p>
@@ -2261,6 +2281,9 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                     onChange={(e) => setTaskFormDept(e.target.value)}
                     className="w-full bg-slate-50 border border-blue-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600 transition"
                   >
+                    {availableDepts.length === 0 && (
+                      <option value="__NEW__">+ Create New Department / Group...</option>
+                    )}
                     {availableDepts.map(d => {
                       const matchTeam = systemTeams.find(t => t.teamName === d);
                       const label = matchTeam?.teamNameAm && matchTeam.teamNameAm !== d
@@ -2270,7 +2293,9 @@ export const TaskManagerView: React.FC<TaskManagerViewProps> = ({
                         <option key={d} value={d}>{label}</option>
                       );
                     })}
-                    <option value="__NEW__">+ New Department...</option>
+                    {availableDepts.length > 0 && (
+                      <option value="__NEW__">+ New Department...</option>
+                    )}
                   </select>
                   {taskFormDept === '__NEW__' && (
                     <input

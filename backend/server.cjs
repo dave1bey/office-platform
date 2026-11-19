@@ -29,16 +29,12 @@ function getLocalDateString(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
-// In-Memory Database Seed
-const teams = [
-  { id: 1, teamName: "Development", teamNameAm: "የልማት ቡድን", teamNameTi: "ናይ ምዕባለ ጋንታ", teamNameOm: "Garee Misoomaa" },
-  { id: 2, teamName: "Quality Assurance", teamNameAm: "የጥራት ማረጋገጫ", teamNameTi: "ምርግጋጽ ጽሬት", teamNameOm: "Mirkaneessa Qulqullinaa" },
-  { id: 3, teamName: "Operations", teamNameAm: "ኦፕሬሽን", teamNameTi: "ኦፕሬሽን", teamNameOm: "Hojii Gaggeessituu" }
-];
+// In-Memory Database Seed - Clean slate for groups/teams (default placeholder groups removed as requested)
+let teams = [];
 
 // Helper to get fallback default department from existing teams
 function getDefaultDepartment() {
-  return teams.length > 0 && teams[0].teamName ? teams[0].teamName : 'General';
+  return teams.length > 0 && teams[0].teamName ? teams[0].teamName : '';
 }
 
 // Sequential auto-generator for CBS Task IDs (default prefix CBS as requested)
@@ -59,11 +55,11 @@ function generateNextCbsId() {
 }
 
 const employees = [
-  { id: 1, employeeCode: "EMP-001", fullName: "Admin User", email: "admin@office.lan", password: "password123", role: "ADMIN", preferredLang: "en", teams: ["Development"] },
-  { id: 2, employeeCode: "EMP-002", fullName: "Abebe Bikila", email: "abebe@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "am", teams: ["Development"] },
-  { id: 3, employeeCode: "EMP-003", fullName: "Hagos Berhe", email: "hagos@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "ti", teams: ["Development"] },
-  { id: 4, employeeCode: "EMP-004", fullName: "Tolassa Chala", email: "tolassa@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "om", teams: ["Quality Assurance"] },
-  { id: 5, employeeCode: "EMP-005", fullName: "Sara Tesfaye", email: "sara@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "am", teams: ["Operations"] }
+  { id: 1, employeeCode: "EMP-001", fullName: "Admin User", email: "admin@office.lan", password: "password123", role: "ADMIN", preferredLang: "en", teams: [] },
+  { id: 2, employeeCode: "EMP-002", fullName: "Abebe Bikila", email: "abebe@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "am", teams: [] },
+  { id: 3, employeeCode: "EMP-003", fullName: "Hagos Berhe", email: "hagos@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "ti", teams: [] },
+  { id: 4, employeeCode: "EMP-004", fullName: "Tolassa Chala", email: "tolassa@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "om", teams: [] },
+  { id: 5, employeeCode: "EMP-005", fullName: "Sara Tesfaye", email: "sara@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "am", teams: [] }
 ];
 
 let today = getLocalDateString();
@@ -2458,7 +2454,7 @@ const server = http.createServer((req, res) => {
     const csvPath = path.resolve(__dirname, '..', 'sample_action_plan.csv');
     if (fs.existsSync(csvPath)) {
       const content = fs.readFileSync(csvPath, 'utf8');
-      json({ rawCsv: content, department: "Development" });
+      json({ rawCsv: content, department: getDefaultDepartment() || "" });
       return;
     }
   }

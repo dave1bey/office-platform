@@ -110,6 +110,22 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
   // Filter States: Day, Week, Month, Year, All
   const [selectedPeriod, setSelectedPeriod] = useState<'ALL' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'>('ALL');
   const [selectedTeam, setSelectedTeam] = useState<string>('ALL');
+  const [teamsList, setTeamsList] = useState<string[]>([]);
+
+  // Dynamically load active created departments/teams from /api/teams
+  useEffect(() => {
+    fetch('/api/teams', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) {
+          const list = data.map((t: any) => t.teamName || t.name).filter(Boolean);
+          setTeamsList(list);
+        }
+      })
+      .catch(err => console.error('Failed to load teams for leaderboard:', err));
+  }, [token, refreshTrigger]);
 
   // Export State
   const [exporting, setExporting] = useState(false);
@@ -720,9 +736,9 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                 className="bg-transparent text-slate-800 text-xs font-semibold focus:outline-none cursor-pointer"
               >
                 <option value="ALL">All Departments</option>
-                <option value="Development">Development</option>
-                <option value="Quality Assurance">Quality Assurance</option>
-                <option value="Operations">Operations</option>
+                {teamsList.map(team => (
+                  <option key={team} value={team}>{team}</option>
+                ))}
               </select>
             </div>
 

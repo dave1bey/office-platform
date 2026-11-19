@@ -200,19 +200,19 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, deferredPr
                   <span className="font-mono text-slate-500">admin@office.lan (EMP-001)</span>
                 </div>
                 <div className="flex justify-between items-center py-0.5 border-b border-slate-200/60">
-                  <span className="font-semibold text-slate-800">Abebe Bikila (Development):</span>
+                  <span className="font-semibold text-slate-800">Abebe Bikila:</span>
                   <span className="font-mono text-slate-500">abebe@office.lan (EMP-002)</span>
                 </div>
                 <div className="flex justify-between items-center py-0.5 border-b border-slate-200/60">
-                  <span className="font-semibold text-slate-800">Hagos Berhe (Development):</span>
+                  <span className="font-semibold text-slate-800">Hagos Berhe:</span>
                   <span className="font-mono text-slate-500">hagos@office.lan (EMP-003)</span>
                 </div>
                 <div className="flex justify-between items-center py-0.5 border-b border-slate-200/60">
-                  <span className="font-semibold text-slate-800">Tolassa Chala (QA):</span>
+                  <span className="font-semibold text-slate-800">Tolassa Chala:</span>
                   <span className="font-mono text-slate-500">tolassa@office.lan (EMP-004)</span>
                 </div>
                 <div className="flex justify-between items-center py-0.5">
-                  <span className="font-semibold text-slate-800">Sara Tesfaye (Operations):</span>
+                  <span className="font-semibold text-slate-800">Sara Tesfaye:</span>
                   <span className="font-mono text-slate-500">sara@office.lan (EMP-005)</span>
                 </div>
               </div>

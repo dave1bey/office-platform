@@ -44,16 +44,7 @@ public class DataInitializer implements CommandLineRunner {
             return; // Already initialized
         }
 
-        // 1. Teams
-        Team devTeam = new Team("Development", "የልማት ቡድን", "ናይ ምዕባለ ጋንታ", "Garee Misoomaa", "Software engineering");
-        Team qaTeam = new Team("Quality Assurance", "የጥራት ማረጋገጫ", "ምርግጋጽ ጽሬት", "Mirkaneessa Qulqullinaa", "Testing & QA");
-        Team opsTeam = new Team("Operations", "ኦፕሬሽን", "ኦፕሬሽን", "Hojii Gaggeessituu", "Office operations");
-
-        teamRepository.save(devTeam);
-        teamRepository.save(qaTeam);
-        teamRepository.save(opsTeam);
-
-        // 2. Employees
+        // 1. Employees (Clean slate: groups are created dynamically by the admin)
         String defaultHash = passwordEncoder.encode("password123");
 
         Employee admin = new Employee();
@@ -72,7 +63,6 @@ public class DataInitializer implements CommandLineRunner {
         manager.setPreferredLang("am");
         manager.setPasswordHash(defaultHash);
         manager.setRole(Role.MANAGER);
-        manager.setTeams(Set.of(devTeam));
         employeeRepository.save(manager);
 
         Employee emp1 = new Employee();
@@ -82,7 +72,6 @@ public class DataInitializer implements CommandLineRunner {
         emp1.setPreferredLang("ti");
         emp1.setPasswordHash(defaultHash);
         emp1.setRole(Role.EMPLOYEE);
-        emp1.setTeams(Set.of(devTeam));
         employeeRepository.save(emp1);
 
         Employee emp2 = new Employee();
@@ -92,7 +81,6 @@ public class DataInitializer implements CommandLineRunner {
         emp2.setPreferredLang("om");
         emp2.setPasswordHash(defaultHash);
         emp2.setRole(Role.EMPLOYEE);
-        emp2.setTeams(Set.of(qaTeam));
         employeeRepository.save(emp2);
 
         Employee emp3 = new Employee();
@@ -102,7 +90,6 @@ public class DataInitializer implements CommandLineRunner {
         emp3.setPreferredLang("am");
         emp3.setPasswordHash(defaultHash);
         emp3.setRole(Role.EMPLOYEE);
-        emp3.setTeams(Set.of(opsTeam));
         employeeRepository.save(emp3);
 
         // 3. Sample Master Action Plan
