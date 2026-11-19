@@ -450,6 +450,11 @@ const server = http.createServer((req, res) => {
 
   // System: Network & Mobile Access Info (for Android and iOS app installation)
   if (pathname === '/api/system/network-info' && req.method === 'GET') {
+    const hostHeader = req.headers['host'] || '';
+    const forwardedProto = req.headers['x-forwarded-proto'] || 'https';
+    const isCloud = hostHeader && !hostHeader.includes('localhost') && !hostHeader.includes('127.0.0.1') && !hostHeader.startsWith('192.168.') && !hostHeader.startsWith('10.');
+    const cloudUrl = isCloud ? `${forwardedProto}://${hostHeader}/` : null;
+
     const ifaces = os.networkInterfaces();
     const addresses = [];
     for (const [name, addrs] of Object.entries(ifaces)) {
@@ -463,20 +468,33 @@ const server = http.createServer((req, res) => {
       port: PORT,
       localUrl: `http://localhost:${PORT}/`,
       networkUrls: addresses,
-      primaryLanUrl: addresses[0] ? addresses[0].url : `http://localhost:${PORT}/`
+      primaryLanUrl: cloudUrl || (addresses[0] ? addresses[0].url : `http://localhost:${PORT}/`),
+      cloudUrl: cloudUrl
     });
     return;
   }
 
-  // Mobile APK Download Endpoint
-  if (pathname === '/api/download/apk' || pathname === '/Office-Action.apk' || pathname === '/Office-Attendance.apk') {
+  // Mobile APK Download Endpoint (Serves native Android APK with proper MIME, byte ranges and streaming)
+  const isApkDownload = (p) => {
+    if (!p) return false;
+    const lower = p.toLowerCase();
+    return lower === '/api/download/apk' ||
+           lower === '/office-action.apk' ||
+           lower === '/office-attendance.apk';
+  };
+
+  if (isApkDownload(pathname)) {
     const apkPaths = [
-      path.resolve(__dirname, '..', 'frontend', 'public', 'Office-Action.apk'),
-      path.resolve(__dirname, '..', 'Office-Action.apk'),
       path.resolve(__dirname, '..', 'frontend', 'dist', 'Office-Action.apk'),
-      path.resolve(__dirname, '..', 'frontend', 'public', 'Office-Attendance.apk'),
-      path.resolve(__dirname, '..', 'Office-Attendance.apk'),
+      path.resolve(__dirname, '..', 'Office-Action.apk'),
       path.resolve(__dirname, '..', 'frontend', 'dist', 'Office-Attendance.apk'),
+      path.resolve(__dirname, '..', 'Office-Attendance.apk'),
+      path.resolve(__dirname, '..', 'frontend', 'public', 'Office-Action.apk'),
+      path.resolve(__dirname, '..', 'frontend', 'public', 'Office-Attendance.apk'),
+      path.resolve(process.cwd(), 'Office-Action.apk'),
+      path.resolve(process.cwd(), 'Office-Attendance.apk'),
+      path.resolve(process.cwd(), 'frontend', 'dist', 'Office-Action.apk'),
+      path.resolve(__dirname, 'Office-Action.apk'),
       path.resolve(__dirname, '..', 'frontend', 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk')
     ];
     const foundPath = apkPaths.find(p => fs.existsSync(p));
@@ -486,11 +504,24 @@ const server = http.createServer((req, res) => {
         'Content-Type': 'application/vnd.android.package-archive',
         'Content-Length': stat.size,
         'Content-Disposition': 'attachment; filename="Office-Action.apk"',
+        'Accept-Ranges': 'bytes',
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
         'Pragma': 'no-cache',
         'Expires': '0'
       });
-      fs.createReadStream(foundPath).pipe(res);
+      if (req.method === 'HEAD') {
+        res.end();
+        return;
+      }
+      const stream = fs.createReadStream(foundPath);
+      stream.on('error', (err) => {
+        console.error('Error streaming APK:', err);
+        if (!res.headersSent) {
+          res.writeHead(500, { 'Content-Type': 'text/plain' });
+        }
+        res.end('Error streaming APK file');
+      });
+      stream.pipe(res);
       return;
     } else {
       json({ error: "APK build is in progress or not yet generated. You can install instantly via your phone's browser (Add to Home Screen)." }, 404);
@@ -3455,6 +3486,12 @@ const server = http.createServer((req, res) => {
         return;
       }
     } else {
+      // If requesting binary or download file that does not exist, return 404 instead of HTML
+      if (pathname.endsWith('.apk') || pathname.endsWith('.zip') || pathname.endsWith('.xlsx')) {
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: "Requested file not found or build in progress." }));
+        return;
+      }
       // If file doesn't exist, fallback to index.html (SPA routing for HTML navigation)
       if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
         filePath = path.join(DIST_DIR, 'index.html');

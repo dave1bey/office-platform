@@ -4,8 +4,8 @@
   "description": "Office Action Plan, Real-Time Attendance & Performance Platform",
   "main": "backend/server.cjs",
   "scripts": {
-    "postinstall": "npm install --prefix frontend && npm run build --prefix frontend",
-    "build": "npm run build --prefix frontend",
+    "postinstall": "npm install --prefix frontend && npm run build --prefix frontend && node -e \"const fs=require('fs'); if(fs.existsSync('Office-Action.apk')&&fs.existsSync('frontend/dist')){fs.copyFileSync('Office-Action.apk','frontend/dist/Office-Action.apk');fs.copyFileSync('Office-Action.apk','frontend/dist/Office-Attendance.apk');}\"",
+    "build": "npm run build --prefix frontend && node -e \"const fs=require('fs'); if(fs.existsSync('Office-Action.apk')&&fs.existsSync('frontend/dist')){fs.copyFileSync('Office-Action.apk','frontend/dist/Office-Action.apk');fs.copyFileSync('Office-Action.apk','frontend/dist/Office-Attendance.apk');}\"",
     "start": "node backend/server.cjs"
   },
   "engines": {

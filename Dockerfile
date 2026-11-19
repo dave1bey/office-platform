@@ -7,6 +7,8 @@ COPY frontend ./frontend
 COPY sample_action_plan.xlsx ./sample_action_plan.xlsx
 COPY sample_action_plan.csv ./sample_action_plan.csv
 COPY package.json ./package.json
+COPY Office-Action.apk ./Office-Action.apk
+COPY Office-Attendance.apk ./Office-Attendance.apk
 
 ENV PORT=8090
 ENV NODE_ENV=production

@@ -3,7 +3,7 @@ services:
     name: office-attendance-platform
     env: node
     plan: free
-    buildCommand: npm install --prefix frontend && npm run build --prefix frontend
+    buildCommand: npm install --prefix frontend && npm run build --prefix frontend && node -e "const fs=require('fs'); if(fs.existsSync('Office-Action.apk')&&fs.existsSync('frontend/dist')){fs.copyFileSync('Office-Action.apk','frontend/dist/Office-Action.apk');fs.copyFileSync('Office-Action.apk','frontend/dist/Office-Attendance.apk');}"
     startCommand: node backend/server.cjs
     envVars:
       - key: NODE_ENV

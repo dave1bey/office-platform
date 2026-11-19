@@ -32,11 +32,28 @@ export const MobileInstallModal: React.FC<MobileInstallModalProps> = ({
   const [installSuccess, setInstallSuccess] = useState(false);
 
   useEffect(() => {
+    // If running on a cloud domain (e.g. onrender.com) or over HTTPS, prioritize current public URL
+    const isCloudHost = window.location.hostname !== 'localhost' &&
+                        window.location.hostname !== '127.0.0.1' &&
+                        !window.location.hostname.startsWith('192.168.') &&
+                        !window.location.hostname.endsWith('.local');
+
+    if (isCloudHost || window.location.protocol === 'https:') {
+      const publicUrl = window.location.origin + '/';
+      setPrimaryUrl(publicUrl);
+      setNetworkUrls([publicUrl]);
+    }
+
     // Fetch network LAN IPs from backend
     fetch('/api/system/network-info')
       .then(r => r.json())
       .then(data => {
-        if (data.networkUrls && data.networkUrls.length > 0) {
+        if (data.cloudUrl) {
+          setPrimaryUrl(data.cloudUrl);
+          setNetworkUrls([data.cloudUrl]);
+        } else if (isCloudHost || window.location.protocol === 'https:') {
+          setPrimaryUrl(window.location.origin + '/');
+        } else if (data.networkUrls && data.networkUrls.length > 0) {
           const urls = data.networkUrls.map((u: any) => u.url);
           setNetworkUrls(urls);
           setPrimaryUrl(data.primaryLanUrl || urls[0]);
