@@ -44,11 +44,11 @@ public class DataInitializer implements CommandLineRunner {
             return; // Already initialized
         }
 
-        // 1. Employees (Clean slate: groups are created dynamically by the admin)
+        // 1. Employees (Sequential CBS IDs starting with CBS-01)
         String defaultHash = passwordEncoder.encode("password123");
 
         Employee admin = new Employee();
-        admin.setEmployeeCode("EMP-001");
+        admin.setEmployeeCode("CBS-01");
         admin.setFullName("Admin User");
         admin.setEmail("admin@office.lan");
         admin.setPreferredLang("en");
@@ -57,7 +57,7 @@ public class DataInitializer implements CommandLineRunner {
         employeeRepository.save(admin);
 
         Employee manager = new Employee();
-        manager.setEmployeeCode("EMP-002");
+        manager.setEmployeeCode("CBS-02");
         manager.setFullName("Abebe Bikila");
         manager.setEmail("abebe@office.lan");
         manager.setPreferredLang("am");
@@ -66,7 +66,7 @@ public class DataInitializer implements CommandLineRunner {
         employeeRepository.save(manager);
 
         Employee emp1 = new Employee();
-        emp1.setEmployeeCode("EMP-003");
+        emp1.setEmployeeCode("CBS-03");
         emp1.setFullName("Hagos Berhe");
         emp1.setEmail("hagos@office.lan");
         emp1.setPreferredLang("ti");
@@ -75,7 +75,7 @@ public class DataInitializer implements CommandLineRunner {
         employeeRepository.save(emp1);
 
         Employee emp2 = new Employee();
-        emp2.setEmployeeCode("EMP-004");
+        emp2.setEmployeeCode("CBS-04");
         emp2.setFullName("Tolassa Chala");
         emp2.setEmail("tolassa@office.lan");
         emp2.setPreferredLang("om");
@@ -84,7 +84,7 @@ public class DataInitializer implements CommandLineRunner {
         employeeRepository.save(emp2);
 
         Employee emp3 = new Employee();
-        emp3.setEmployeeCode("EMP-005");
+        emp3.setEmployeeCode("CBS-05");
         emp3.setFullName("Sara Tesfaye");
         emp3.setEmail("sara@office.lan");
         emp3.setPreferredLang("am");

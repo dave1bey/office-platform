@@ -197,23 +197,23 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, deferredPr
               <div className="space-y-1.5 pt-1 text-[11px] text-slate-600">
                 <div className="flex justify-between items-center py-0.5 border-b border-slate-200/60">
                   <span className="font-semibold text-blue-900">Admin User (Administrator):</span>
-                  <span className="font-mono text-slate-500">admin@office.lan (EMP-001)</span>
+                  <span className="font-mono text-slate-500">admin@office.lan (CBS-01)</span>
                 </div>
                 <div className="flex justify-between items-center py-0.5 border-b border-slate-200/60">
                   <span className="font-semibold text-slate-800">Abebe Bikila:</span>
-                  <span className="font-mono text-slate-500">abebe@office.lan (EMP-002)</span>
+                  <span className="font-mono text-slate-500">abebe@office.lan (CBS-02)</span>
                 </div>
                 <div className="flex justify-between items-center py-0.5 border-b border-slate-200/60">
                   <span className="font-semibold text-slate-800">Hagos Berhe:</span>
-                  <span className="font-mono text-slate-500">hagos@office.lan (EMP-003)</span>
+                  <span className="font-mono text-slate-500">hagos@office.lan (CBS-03)</span>
                 </div>
                 <div className="flex justify-between items-center py-0.5 border-b border-slate-200/60">
                   <span className="font-semibold text-slate-800">Tolassa Chala:</span>
-                  <span className="font-mono text-slate-500">tolassa@office.lan (EMP-004)</span>
+                  <span className="font-mono text-slate-500">tolassa@office.lan (CBS-04)</span>
                 </div>
                 <div className="flex justify-between items-center py-0.5">
                   <span className="font-semibold text-slate-800">Sara Tesfaye:</span>
-                  <span className="font-mono text-slate-500">sara@office.lan (EMP-005)</span>
+                  <span className="font-mono text-slate-500">sara@office.lan (CBS-05)</span>
                 </div>
               </div>
             </div>

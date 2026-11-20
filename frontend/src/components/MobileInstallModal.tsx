@@ -258,7 +258,7 @@ export const MobileInstallModal: React.FC<MobileInstallModalProps> = ({
                 You can download the APK file directly to your phone and install it:
               </p>
               <a
-                href="/Office-Action.apk?v=3"
+                href="/Office-Action.apk?v=4"
                 download="Office-Action.apk"
                 className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition cursor-pointer"
               >

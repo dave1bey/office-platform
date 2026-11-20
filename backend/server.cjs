@@ -54,12 +54,29 @@ function generateNextCbsId() {
   return `CBS-${String(nextNum).padStart(2, '0')}`;
 }
 
+// Sequential auto-generator for CBS Employee IDs (default prefix CBS-01 as requested)
+function generateNextCbsEmployeeCode() {
+  let maxCbsNum = 0;
+  if (Array.isArray(employees)) {
+    employees.forEach(e => {
+      const codeStr = String(e.employeeCode || '');
+      const match = codeStr.match(/CBS[^\d]*(\d+)/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxCbsNum) maxCbsNum = num;
+      }
+    });
+  }
+  const nextNum = maxCbsNum > 0 ? maxCbsNum + 1 : 1;
+  return `CBS-${String(nextNum).padStart(2, '0')}`;
+}
+
 const employees = [
-  { id: 1, employeeCode: "EMP-001", fullName: "Admin User", email: "admin@office.lan", password: "password123", role: "ADMIN", preferredLang: "en", teams: [] },
-  { id: 2, employeeCode: "EMP-002", fullName: "Abebe Bikila", email: "abebe@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "am", teams: [] },
-  { id: 3, employeeCode: "EMP-003", fullName: "Hagos Berhe", email: "hagos@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "ti", teams: [] },
-  { id: 4, employeeCode: "EMP-004", fullName: "Tolassa Chala", email: "tolassa@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "om", teams: [] },
-  { id: 5, employeeCode: "EMP-005", fullName: "Sara Tesfaye", email: "sara@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "am", teams: [] }
+  { id: 1, employeeCode: "CBS-01", fullName: "Admin User", email: "admin@office.lan", password: "password123", role: "ADMIN", preferredLang: "en", teams: [] },
+  { id: 2, employeeCode: "CBS-02", fullName: "Abebe Bikila", email: "abebe@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "am", teams: [] },
+  { id: 3, employeeCode: "CBS-03", fullName: "Hagos Berhe", email: "hagos@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "ti", teams: [] },
+  { id: 4, employeeCode: "CBS-04", fullName: "Tolassa Chala", email: "tolassa@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "om", teams: [] },
+  { id: 5, employeeCode: "CBS-05", fullName: "Sara Tesfaye", email: "sara@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "am", teams: [] }
 ];
 
 let today = getLocalDateString();
@@ -473,10 +490,11 @@ const server = http.createServer((req, res) => {
   // Mobile APK Download Endpoint (Serves native Android APK with proper MIME, byte ranges and streaming)
   const isApkDownload = (p) => {
     if (!p) return false;
-    const lower = p.toLowerCase();
+    const lower = p.toLowerCase().replace(/\/+$/, '');
     return lower === '/api/download/apk' ||
            lower === '/office-action.apk' ||
-           lower === '/office-attendance.apk';
+           lower === '/office-attendance.apk' ||
+           lower === '/app-debug.apk';
   };
 
   if (isApkDownload(pathname)) {
@@ -803,7 +821,7 @@ const server = http.createServer((req, res) => {
         return;
       }
 
-      const empCode = body.employeeCode || `EMP-00${employees.length + 1}`;
+      const empCode = (body.employeeCode && body.employeeCode.trim()) || generateNextCbsEmployeeCode();
       const assignedTeams = Array.isArray(body.teams) ? body.teams : (body.teams ? [body.teams] : []);
 
       const newEmp = {
@@ -2215,7 +2233,7 @@ const server = http.createServer((req, res) => {
 
     const newEmp = {
       id: employees.length + 1,
-      employeeCode: `EMP-00${employees.length + 1}`,
+      employeeCode: generateNextCbsEmployeeCode(),
       fullName: candidateFullName,
       email: candidateEmail,
       role: "EMPLOYEE",

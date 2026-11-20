@@ -5,10 +5,10 @@
 -- Placeholder groups removed: new groups are created dynamically by the administrator.
 
 INSERT INTO employees (employee_code, full_name, email, preferred_lang, password_hash, role, is_active) VALUES
-('EMP-001', 'Admin User', 'admin@office.lan', 'en', '$2a$10$7Z8lqYlJ5.v8P6P/q5e41eDkmvG.X.gK0XlI4U6jD4l6xX8.lZq0K', 'ADMIN', TRUE),
-('EMP-002', 'Abebe Bikila', 'abebe@office.lan', 'am', '$2a$10$7Z8lqYlJ5.v8P6P/q5e41eDkmvG.X.gK0XlI4U6jD4l6xX8.lZq0K', 'MANAGER', TRUE),
-('EMP-003', 'Hagos Berhe', 'hagos@office.lan', 'ti', '$2a$10$7Z8lqYlJ5.v8P6P/q5e41eDkmvG.X.gK0XlI4U6jD4l6xX8.lZq0K', 'EMPLOYEE', TRUE),
-('EMP-004', 'Tolassa Chala', 'tolassa@office.lan', 'om', '$2a$10$7Z8lqYlJ5.v8P6P/q5e41eDkmvG.X.gK0XlI4U6jD4l6xX8.lZq0K', 'EMPLOYEE', TRUE),
-('EMP-005', 'Sara Tesfaye', 'sara@office.lan', 'am', '$2a$10$7Z8lqYlJ5.v8P6P/q5e41eDkmvG.X.gK0XlI4U6jD4l6xX8.lZq0K', 'EMPLOYEE', TRUE)
+('CBS-01', 'Admin User', 'admin@office.lan', 'en', '$2a$10$7Z8lqYlJ5.v8P6P/q5e41eDkmvG.X.gK0XlI4U6jD4l6xX8.lZq0K', 'ADMIN', TRUE),
+('CBS-02', 'Abebe Bikila', 'abebe@office.lan', 'am', '$2a$10$7Z8lqYlJ5.v8P6P/q5e41eDkmvG.X.gK0XlI4U6jD4l6xX8.lZq0K', 'MANAGER', TRUE),
+('CBS-03', 'Hagos Berhe', 'hagos@office.lan', 'ti', '$2a$10$7Z8lqYlJ5.v8P6P/q5e41eDkmvG.X.gK0XlI4U6jD4l6xX8.lZq0K', 'EMPLOYEE', TRUE),
+('CBS-04', 'Tolassa Chala', 'tolassa@office.lan', 'om', '$2a$10$7Z8lqYlJ5.v8P6P/q5e41eDkmvG.X.gK0XlI4U6jD4l6xX8.lZq0K', 'EMPLOYEE', TRUE),
+('CBS-05', 'Sara Tesfaye', 'sara@office.lan', 'am', '$2a$10$7Z8lqYlJ5.v8P6P/q5e41eDkmvG.X.gK0XlI4U6jD4l6xX8.lZq0K', 'EMPLOYEE', TRUE)
 ON CONFLICT (employee_code) DO NOTHING;
 
