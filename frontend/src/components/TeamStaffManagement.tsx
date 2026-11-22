@@ -20,10 +20,12 @@ import {
   Zap,
   AlertCircle,
   Send,
-  KeyRound
+  KeyRound,
+  Edit
 } from 'lucide-react';
 import { MultiDayPicker, MultiDaySelection } from './MultiDayPicker';
 import { ChangePasswordModal } from './ChangePasswordModal';
+import { EditAbsenceModal } from './EditAbsenceModal';
 
 interface TeamItem {
   id: number;
@@ -60,9 +62,14 @@ export const TeamStaffManagement: React.FC<TeamStaffManagementProps> = ({
   onDataChanged
 }) => {
   const { t } = useTranslation();
-  const [activeSection, setActiveSection] = useState<'EMPLOYEES' | 'TEAMS'>('EMPLOYEES');
+  const [activeSection, setActiveSection] = useState<'EMPLOYEES' | 'TEAMS' | 'ABSENCES'>('EMPLOYEES');
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [teams, setTeams] = useState<TeamItem[]>([]);
+  const [absencesList, setAbsencesList] = useState<any[]>([]);
+  const [loadingAbsences, setLoadingAbsences] = useState(false);
+  const [absenceSearchQuery, setAbsenceSearchQuery] = useState('');
+  const [editingAbsence, setEditingAbsence] = useState<any | null>(null);
+  const [showEditAbsenceModal, setShowEditAbsenceModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -192,6 +199,44 @@ export const TeamStaffManagement: React.FC<TeamStaffManagementProps> = ({
     }
   };
 
+  const fetchAbsences = async () => {
+    try {
+      setLoadingAbsences(true);
+      const res = await fetch('/api/admin/absences', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAbsencesList(data);
+      }
+    } catch (e) {
+      console.error('Failed to load absences', e);
+    } finally {
+      setLoadingAbsences(false);
+    }
+  };
+
+  const handleCancelAbsence = async (rec: any) => {
+    if (!window.confirm(`⚠️ Cancel absence on ${rec.attendanceDate} for ${rec.employeeName}?\n\nThis will restore their status to PRESENT.`)) return;
+    try {
+      const res = await fetch(`/api/admin/attendance/absence/${rec.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchAbsences();
+        fetchData();
+        onDataChanged();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to cancel absence');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error cancelling absence');
+    }
+  };
+
   const fetchData = async () => {
     try {
       const [empRes, teamRes] = await Promise.all([
@@ -207,6 +252,7 @@ export const TeamStaffManagement: React.FC<TeamStaffManagementProps> = ({
           setNewCode(generateNextCbsEmployeeCode(empData));
         }
       }
+      fetchAbsences();
     } catch (err) {
       console.error("Failed to load staff/team data", err);
     } finally {
@@ -462,6 +508,22 @@ export const TeamStaffManagement: React.FC<TeamStaffManagementProps> = ({
             >
               Departments & Groups ({teams.length})
             </button>
+            <button
+              onClick={() => {
+                setActiveSection('ABSENCES');
+                fetchAbsences();
+              }}
+              className={`px-3 py-1.5 rounded-md transition cursor-pointer flex items-center space-x-1.5 ${
+                activeSection === 'ABSENCES' ? 'bg-blue-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-blue-700'
+              }`}
+            >
+              <span>Manage Absences</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                activeSection === 'ABSENCES' ? 'bg-blue-800 text-white' : 'bg-rose-100 text-rose-700 font-bold'
+              }`}>
+                {absencesList.length}
+              </span>
+            </button>
           </div>
 
           {/* Action Button */}
@@ -485,13 +547,21 @@ export const TeamStaffManagement: React.FC<TeamStaffManagementProps> = ({
                 <span>Create User</span>
               </button>
             </div>
-          ) : (
+          ) : activeSection === 'TEAMS' ? (
             <button
               onClick={() => setShowTeamModal(true)}
               className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm shadow-blue-600/20 transition cursor-pointer"
             >
               <FolderPlus className="w-4 h-4" />
               <span>Create Group</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => openAdminAbsenceModal(null)}
+              className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm shadow-rose-600/20 transition cursor-pointer"
+            >
+              <AlertCircle className="w-4 h-4" />
+              <span>Record Staff Absence</span>
             </button>
           )}
         </div>
@@ -700,6 +770,169 @@ export const TeamStaffManagement: React.FC<TeamStaffManagementProps> = ({
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* SECTION 3: MANAGE SUBMITTED ABSENCES */}
+      {activeSection === 'ABSENCES' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="relative max-w-sm flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search absences by staff, CBS code, department, date, category..."
+                value={absenceSearchQuery}
+                onChange={(e) => setAbsenceSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-blue-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-600 transition"
+              />
+            </div>
+
+            <div className="flex items-center space-x-2 text-xs text-slate-500">
+              <span className="font-semibold text-slate-700">Total Recorded:</span>
+              <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold border border-rose-200">
+                {absencesList.length} Absences
+              </span>
+            </div>
+          </div>
+
+          {absencesList.filter(rec => {
+            if (!absenceSearchQuery.trim()) return true;
+            const q = absenceSearchQuery.toLowerCase();
+            return (
+              (rec.employeeName && rec.employeeName.toLowerCase().includes(q)) ||
+              (rec.employeeCode && rec.employeeCode.toLowerCase().includes(q)) ||
+              (rec.department && rec.department.toLowerCase().includes(q)) ||
+              (rec.attendanceDate && rec.attendanceDate.toLowerCase().includes(q)) ||
+              (rec.absenceCategory && rec.absenceCategory.toLowerCase().includes(q)) ||
+              (rec.reason && rec.reason.toLowerCase().includes(q))
+            );
+          }).length === 0 ? (
+            <div className="p-12 text-center border-2 border-dashed border-blue-100 rounded-2xl bg-blue-50/30">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+                <Check className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-800">
+                {absenceSearchQuery ? 'No matching absence records' : 'No recorded absences'}
+              </h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+                {absenceSearchQuery
+                  ? 'Try searching with different terms like employee name, code, or date.'
+                  : 'All staff members are currently marked present with no pending absence entries.'}
+              </p>
+              {!absenceSearchQuery && (
+                <button
+                  onClick={() => openAdminAbsenceModal(null)}
+                  className="mt-4 inline-flex items-center space-x-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Record Staff Absence</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto border border-blue-100 rounded-xl shadow-sm">
+              <table className="w-full text-left text-xs text-slate-700">
+                <thead className="bg-blue-50/80 text-blue-950 uppercase tracking-wider font-bold border-b border-blue-200">
+                  <tr>
+                    <th className="p-3">Staff Member</th>
+                    <th className="p-3">Department</th>
+                    <th className="p-3">Absence Date</th>
+                    <th className="p-3">Category</th>
+                    <th className="p-3">Reason / Description</th>
+                    <th className="p-3">Filed By</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-blue-50 bg-white">
+                  {absencesList.filter(rec => {
+                    if (!absenceSearchQuery.trim()) return true;
+                    const q = absenceSearchQuery.toLowerCase();
+                    return (
+                      (rec.employeeName && rec.employeeName.toLowerCase().includes(q)) ||
+                      (rec.employeeCode && rec.employeeCode.toLowerCase().includes(q)) ||
+                      (rec.department && rec.department.toLowerCase().includes(q)) ||
+                      (rec.attendanceDate && rec.attendanceDate.toLowerCase().includes(q)) ||
+                      (rec.absenceCategory && rec.absenceCategory.toLowerCase().includes(q)) ||
+                      (rec.reason && rec.reason.toLowerCase().includes(q))
+                    );
+                  }).map((rec) => {
+                    const categoryColors: Record<string, string> = {
+                      MEDICAL: 'bg-rose-100 text-rose-800 border-rose-200',
+                      EMERGENCY: 'bg-red-100 text-red-800 border-red-200',
+                      OFFSITE: 'bg-blue-100 text-blue-800 border-blue-200',
+                      OTHER: 'bg-amber-100 text-amber-800 border-amber-200'
+                    };
+                    const badgeColor = categoryColors[rec.absenceCategory] || 'bg-slate-100 text-slate-800 border-slate-200';
+
+                    return (
+                      <tr key={rec.id} className="hover:bg-blue-50/40 transition">
+                        <td className="p-3">
+                          <div className="font-bold text-slate-900">{rec.employeeName}</div>
+                          <div className="text-[11px] font-mono text-slate-500">{rec.employeeCode}</div>
+                        </td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-medium">
+                            {rec.department || 'General'}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center space-x-1.5 font-bold text-slate-800">
+                            <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                            <span>{rec.attendanceDate}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            {new Date(rec.attendanceDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${badgeColor}`}>
+                            {rec.absenceCategory || 'ABSENT'}
+                          </span>
+                        </td>
+                        <td className="p-3 max-w-xs">
+                          <p className="text-slate-700 italic truncate" title={rec.reason || 'No description provided'}>
+                            "{rec.reason || 'No description provided'}"
+                          </p>
+                        </td>
+                        <td className="p-3 text-[11px] text-slate-500">
+                          <div>{rec.filedBy || 'Self'}</div>
+                          {rec.filedAt && (
+                            <div className="text-[10px] text-slate-400">
+                              {new Date(rec.filedAt).toLocaleDateString()}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end space-x-1.5">
+                            <button
+                              onClick={() => {
+                                setEditingAbsence(rec);
+                                setShowEditAbsenceModal(true);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold border border-blue-200 text-xs flex items-center space-x-1 transition cursor-pointer"
+                              title="Edit absence date, category, reason or staff"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              onClick={() => handleCancelAbsence(rec)}
+                              className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold border border-rose-200 text-xs flex items-center space-x-1 transition cursor-pointer"
+                              title="Cancel absence (mark employee present)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Cancel</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -1311,6 +1544,25 @@ export const TeamStaffManagement: React.FC<TeamStaffManagementProps> = ({
           onClose={() => setResetPasswordEmp(null)}
           token={token}
           targetEmployee={resetPasswordEmp}
+        />
+      )}
+
+      {/* ADMIN EDIT / CANCEL ABSENCE MODAL */}
+      {editingAbsence && (
+        <EditAbsenceModal
+          isOpen={showEditAbsenceModal}
+          onClose={() => {
+            setShowEditAbsenceModal(false);
+            setEditingAbsence(null);
+          }}
+          record={editingAbsence}
+          employees={employees}
+          token={token}
+          onSaved={() => {
+            fetchAbsences();
+            fetchData();
+            onDataChanged();
+          }}
         />
       )}
 

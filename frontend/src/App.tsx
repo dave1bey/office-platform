@@ -154,7 +154,13 @@ export const App: React.FC = () => {
       />
 
       {/* Expanding Red Absence Alert Banner (Sub-200ms STOMP broadcast) */}
-      <AbsenceAlertBanner alert={latestAlert} onDismiss={dismissLatestAlert} />
+      <AbsenceAlertBanner
+        alert={latestAlert}
+        onDismiss={dismissLatestAlert}
+        currentUser={user}
+        token={token}
+        onAbsenceUpdated={() => setDataRefreshCounter((prev) => prev + 1)}
+      />
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex-1 w-full space-y-6">

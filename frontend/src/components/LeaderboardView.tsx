@@ -25,8 +25,11 @@ import {
   Check,
   RotateCcw,
   UserCheck,
-  Flame
+  Flame,
+  Edit,
+  Trash2
 } from 'lucide-react';
+import { EditAbsenceModal } from './EditAbsenceModal';
 
 interface AbsentRecord {
   id: number;
@@ -143,6 +146,69 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
 
   // Absence History Modal State
   const [selectedAbsenceEmployee, setSelectedAbsenceEmployee] = useState<LeaderboardItem | null>(null);
+
+  // Absence Edit & Cancel State
+  const [editingAbsenceRecord, setEditingAbsenceRecord] = useState<any | null>(null);
+  const [showEditAbsenceModal, setShowEditAbsenceModal] = useState(false);
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.isTemporaryAdmin;
+
+  const handleCancelSingleAbsence = async (rec: any) => {
+    if (!window.confirm(`⚠️ Are you sure you want to cancel the absence on ${rec.attendanceDate} for ${selectedAbsenceEmployee?.fullName}? Their status will be restored to Present.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/admin/attendance/absence/${rec.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        if (selectedAbsenceEmployee) {
+          const updatedRecs = (selectedAbsenceEmployee.absentRecords || []).filter((r: any) => r.id !== rec.id);
+          setSelectedAbsenceEmployee({
+            ...selectedAbsenceEmployee,
+            absentRecords: updatedRecs,
+            recordedAbsentDays: updatedRecs.length
+          });
+        }
+        fetchLeaderboard();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to cancel absence');
+      }
+    } catch (e) {
+      alert('Error cancelling absence record');
+    }
+  };
+
+  const handleClearAllAbsencesForEmployee = async () => {
+    if (!selectedAbsenceEmployee) return;
+    if (!window.confirm(`⚠️ Clear ALL ${selectedAbsenceEmployee.recordedAbsentDays} absence records for ${selectedAbsenceEmployee.fullName}? Status will be reset to Present.`)) {
+      return;
+    }
+    try {
+      const dates = (selectedAbsenceEmployee.absentRecords || []).map((r: any) => r.attendanceDate);
+      const res = await fetch('/api/admin/attendance/clear', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          employeeId: selectedAbsenceEmployee.employeeId,
+          dates
+        })
+      });
+      if (res.ok) {
+        setSelectedAbsenceEmployee(null);
+        fetchLeaderboard();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to clear absences');
+      }
+    } catch (e) {
+      alert('Error clearing absences');
+    }
+  };
 
   const fetchLeaderboard = async () => {
     setLoading(true);
@@ -1147,9 +1213,22 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
 
             {/* List of Specific Absent Dates */}
             <div className="space-y-3">
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Detailed Absent Dates Breakdown ({selectedAbsenceEmployee.absentRecords?.length || 0} dates)
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Detailed Absent Dates Breakdown ({selectedAbsenceEmployee.absentRecords?.length || 0} dates)
+                </h4>
+                {isAdmin && (selectedAbsenceEmployee.absentRecords?.length || 0) > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearAllAbsencesForEmployee}
+                    className="px-2.5 py-1 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-900 border border-rose-200 text-xs font-bold transition flex items-center space-x-1 cursor-pointer"
+                    title="Clear all absence records for this employee and restore status to Present"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Clear All Absences</span>
+                  </button>
+                )}
+              </div>
 
               {(!selectedAbsenceEmployee.absentRecords || selectedAbsenceEmployee.absentRecords.length === 0) ? (
                 <div className="text-center py-8 bg-emerald-50/50 rounded-xl border border-emerald-200 text-emerald-800 space-y-2">
@@ -1196,9 +1275,40 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                           </div>
                         </div>
 
-                        <div className="text-right text-[11px] text-slate-400 font-medium self-end sm:self-auto">
-                          <span>Recorded by: </span>
-                          <strong className="text-slate-700">{rec.filedBy || 'Self-Reported'}</strong>
+                        <div className="flex items-center space-x-2 self-end sm:self-auto">
+                          <div className="text-right text-[11px] text-slate-400 font-medium">
+                            <span>Recorded by: </span>
+                            <strong className="text-slate-700">{rec.filedBy || 'Self-Reported'}</strong>
+                          </div>
+
+                          {isAdmin && (
+                            <div className="flex items-center space-x-1 pl-2 border-l border-slate-200">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingAbsenceRecord({
+                                    ...rec,
+                                    employeeId: selectedAbsenceEmployee.employeeId,
+                                    employeeName: selectedAbsenceEmployee.fullName,
+                                    employeeCode: selectedAbsenceEmployee.employeeCode
+                                  });
+                                  setShowEditAbsenceModal(true);
+                                }}
+                                className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition cursor-pointer"
+                                title="Edit this absence (change date, category, reason)"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCancelSingleAbsence(rec)}
+                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer"
+                                title="Cancel this absence and mark employee as Present"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -1316,6 +1426,19 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* MODAL 3: EDIT ABSENCE RECORD MODAL (Admin) */}
+      <EditAbsenceModal
+        isOpen={showEditAbsenceModal}
+        onClose={() => setShowEditAbsenceModal(false)}
+        record={editingAbsenceRecord}
+        employees={items.map(i => ({ id: i.employeeId, fullName: i.fullName, employeeCode: i.employeeCode }))}
+        token={token}
+        onSaved={() => {
+          fetchLeaderboard();
+          setSelectedAbsenceEmployee(null);
+        }}
+      />
 
     </div>
   );

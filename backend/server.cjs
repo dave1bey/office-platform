@@ -1490,6 +1490,7 @@ const server = http.createServer((req, res) => {
       });
 
       const alertPayload = {
+        recordId: attendanceRecords[attendanceRecords.length - 1]?.id,
         employeeId: emp.id,
         employeeCode: emp.employeeCode,
         employeeName: emp.fullName,
@@ -1532,7 +1533,152 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Admin: Clear / Delete Absence for Employee
+  // Attendance: List All Absence Records (Admin view)
+  if ((pathname === '/api/admin/absences' || pathname === '/api/attendance/absences') && req.method === 'GET') {
+    const list = attendanceRecords
+      .filter(r => r.status === 'ABSENT')
+      .map(r => {
+        const emp = employees.find(e => e.id === r.employeeId);
+        return {
+          ...r,
+          employeeName: emp ? emp.fullName : 'Staff Member',
+          employeeCode: emp ? emp.employeeCode : 'CBS-00',
+          department: emp && emp.teams && emp.teams[0] ? emp.teams[0] : 'General'
+        };
+      })
+      .sort((a, b) => String(b.attendanceDate || '').localeCompare(String(a.attendanceDate || '')));
+    json(list);
+    return;
+  }
+
+  // Admin: Cancel / Delete a Specific Absence Record by ID
+  const deleteAbsenceMatch = pathname.match(/^\/api\/admin\/attendance\/absence\/(\d+)$/);
+  if (deleteAbsenceMatch && (req.method === 'DELETE' || req.method === 'POST')) {
+    const requester = getRequester();
+    if (!requester || requester.role !== 'ADMIN') {
+      json({ error: "Access Denied: Administrator privileges required." }, 403);
+      return;
+    }
+    const recId = parseInt(deleteAbsenceMatch[1]);
+    const recIndex = attendanceRecords.findIndex(r => r.id === recId);
+    if (recIndex === -1) {
+      json({ error: "Absence record not found" }, 404);
+      return;
+    }
+
+    const removedRec = attendanceRecords[recIndex];
+    attendanceRecords.splice(recIndex, 1);
+
+    const emp = employees.find(e => e.id === removedRec.employeeId);
+    const empName = emp ? emp.fullName : 'Staff Member';
+
+    // Check if employee has any other absence record for this date
+    const stillAbsent = attendanceRecords.some(r => r.employeeId === removedRec.employeeId && r.attendanceDate === removedRec.attendanceDate && r.status === 'ABSENT');
+
+    // Broadcast real-time updates
+    broadcastStompMessage('/topic/admin/attendance', {
+      employeeId: removedRec.employeeId,
+      status: stillAbsent ? 'ABSENT' : 'PRESENT',
+      dates: [removedRec.attendanceDate]
+    });
+    broadcastStompMessage('/topic/absences', { action: 'CANCELLED', recordId: recId, employeeId: removedRec.employeeId });
+    broadcastStompMessage('/topic/tasks/updates', { action: 'RELOAD' });
+    broadcastStompMessage('/topic/admin/live-feed', {
+      id: String(Date.now()),
+      eventType: 'ATTENDANCE_UPDATE',
+      title: `Absence Cancelled: ${empName}`,
+      message: `Admin cancelled absence on ${removedRec.attendanceDate} (${removedRec.absenceCategory || 'Leave'}) for ${empName}. Status set to Present.`,
+      employeeName: empName,
+      severity: 'SUCCESS',
+      timestamp: new Date().toISOString()
+    });
+
+    saveDatabase();
+    json({
+      success: true,
+      message: `Absence on ${removedRec.attendanceDate} for ${empName} was cancelled successfully.`,
+      cancelledRecord: removedRec
+    });
+    return;
+  }
+
+  // Admin: Edit / Modify a Specific Absence Record by ID
+  const editAbsenceMatch = pathname.match(/^\/api\/admin\/attendance\/absence\/(\d+|match)$/);
+  if (editAbsenceMatch && (req.method === 'PUT' || req.method === 'PATCH')) {
+    const requester = getRequester();
+    if (!requester || requester.role !== 'ADMIN') {
+      json({ error: "Access Denied: Administrator privileges required." }, 403);
+      return;
+    }
+    const recId = editAbsenceMatch[1] === 'match' ? 0 : parseInt(editAbsenceMatch[1]);
+    let rec = recId > 0 ? attendanceRecords.find(r => r.id === recId) : null;
+
+    readBody(body => {
+      if (!rec) {
+        // Fallback match by employeeId and attendance date
+        const targetEmpId = parseInt(body.employeeId);
+        const targetDate = body.oldDate || body.attendanceDate || body.date;
+        rec = attendanceRecords.find(r => r.employeeId === targetEmpId && r.attendanceDate === targetDate);
+      }
+      if (!rec) {
+        json({ error: "Absence record not found" }, 404);
+        return;
+      }
+      const oldDate = rec.attendanceDate;
+      const oldCategory = rec.absenceCategory;
+
+      if (body.attendanceDate && /^\d{4}-\d{2}-\d{2}$/.test(String(body.attendanceDate).trim())) {
+        rec.attendanceDate = String(body.attendanceDate).trim();
+      } else if (body.date && /^\d{4}-\d{2}-\d{2}$/.test(String(body.date).trim())) {
+        rec.attendanceDate = String(body.date).trim();
+      }
+
+      if (body.absenceCategory) rec.absenceCategory = String(body.absenceCategory).trim().toUpperCase();
+      if (body.category) rec.absenceCategory = String(body.category).trim().toUpperCase();
+      if (body.reason !== undefined) rec.reason = String(body.reason).trim();
+
+      if (body.employeeId) {
+        const newEmp = employees.find(e => e.id === parseInt(body.employeeId));
+        if (newEmp) {
+          rec.employeeId = newEmp.id;
+        }
+      }
+
+      rec.updatedBy = `Administrator (${requester.fullName})`;
+      rec.updatedAt = new Date().toISOString();
+
+      const emp = employees.find(e => e.id === rec.employeeId);
+      const empName = emp ? emp.fullName : 'Staff Member';
+
+      // Broadcast real-time updates
+      broadcastStompMessage('/topic/admin/attendance', {
+        employeeId: rec.employeeId,
+        status: 'ABSENT',
+        dates: [rec.attendanceDate, oldDate]
+      });
+      broadcastStompMessage('/topic/absences', { action: 'MODIFIED', record: rec });
+      broadcastStompMessage('/topic/tasks/updates', { action: 'RELOAD' });
+      broadcastStompMessage('/topic/admin/live-feed', {
+        id: String(Date.now()),
+        eventType: 'ATTENDANCE_UPDATE',
+        title: `Absence Modified: ${empName}`,
+        message: `Admin updated absence on ${rec.attendanceDate} (${rec.absenceCategory}): "${rec.reason || 'No note'}"`,
+        employeeName: empName,
+        severity: 'INFO',
+        timestamp: new Date().toISOString()
+      });
+
+      saveDatabase();
+      json({
+        success: true,
+        message: `Absence record for ${empName} updated successfully.`,
+        record: rec
+      });
+    });
+    return;
+  }
+
+  // Admin: Clear / Delete Absence for Employee (Multi-day or by recordId)
   if (pathname === '/api/admin/attendance/clear' && req.method === 'POST') {
     const requester = getRequester();
     if (!requester || requester.role !== 'ADMIN') {
@@ -1540,6 +1686,38 @@ const server = http.createServer((req, res) => {
       return;
     }
     readBody(body => {
+      // If direct recordId passed
+      if (body.recordId || body.id) {
+        const targetRecId = parseInt(body.recordId || body.id);
+        const idx = attendanceRecords.findIndex(r => r.id === targetRecId);
+        if (idx !== -1) {
+          const removed = attendanceRecords[idx];
+          attendanceRecords.splice(idx, 1);
+          const emp = employees.find(e => e.id === removed.employeeId);
+          const empName = emp ? emp.fullName : 'Staff Member';
+
+          broadcastStompMessage('/topic/admin/attendance', {
+            employeeId: removed.employeeId,
+            status: 'PRESENT',
+            dates: [removed.attendanceDate]
+          });
+          broadcastStompMessage('/topic/tasks/updates', { action: 'RELOAD' });
+          broadcastStompMessage('/topic/admin/live-feed', {
+            id: String(Date.now()),
+            eventType: 'ATTENDANCE_UPDATE',
+            title: `Absence Cleared: ${empName}`,
+            message: `Admin cleared absence record on ${removed.attendanceDate} for ${empName}. Status set to Present.`,
+            employeeName: empName,
+            severity: 'SUCCESS',
+            timestamp: new Date().toISOString()
+          });
+
+          saveDatabase();
+          json({ success: true, message: `Absence record for ${empName} cleared.` });
+          return;
+        }
+      }
+
       const empId = parseInt(body.employeeId);
       const emp = employees.find(e => e.id === empId);
       if (!emp) {
@@ -1559,6 +1737,7 @@ const server = http.createServer((req, res) => {
         attendanceRecords = attendanceRecords.filter(r => !(r.employeeId === emp.id && r.attendanceDate === d));
       });
       broadcastStompMessage('/topic/admin/attendance', { employeeId: emp.id, status: 'PRESENT', dates });
+      broadcastStompMessage('/topic/tasks/updates', { action: 'RELOAD' });
       broadcastStompMessage('/topic/admin/live-feed', {
         id: String(Date.now()),
         eventType: 'ATTENDANCE_UPDATE',
