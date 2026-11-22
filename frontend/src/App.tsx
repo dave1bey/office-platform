@@ -142,6 +142,7 @@ export const App: React.FC = () => {
         sessionTimeoutMinutes={timeoutMinutes}
         onChangeSessionTimeout={changeTimeoutDuration}
         onExtendSession={extendSession}
+        onDataRestored={() => setDataRefreshCounter((prev) => prev + 1)}
       />
 
       {/* 60-second Session Inactivity Warning Modal */}

@@ -1,0 +1,113 @@
+{
+  "platform": "Office Attendance & Performance Platform",
+  "version": "1.2.0",
+  "savedAt": "2026-11-22T15:00:00.000Z",
+  "counts": {
+    "tasks": 0,
+    "employees": 5,
+    "teams": 0,
+    "attendanceRecords": 2,
+    "messages": 1
+  },
+  "teams": [],
+  "employees": [
+    {
+      "id": 1,
+      "employeeCode": "CBS-01",
+      "fullName": "Admin User",
+      "email": "admin@office.lan",
+      "password": "password123",
+      "role": "ADMIN",
+      "preferredLang": "en",
+      "teams": []
+    },
+    {
+      "id": 2,
+      "employeeCode": "CBS-02",
+      "fullName": "Abebe Bikila",
+      "email": "abebe@office.lan",
+      "password": "password123",
+      "role": "EMPLOYEE",
+      "originalRole": "EMPLOYEE",
+      "isTemporaryAdmin": false,
+      "temporaryAdminUntil": null,
+      "preferredLang": "am",
+      "teams": []
+    },
+    {
+      "id": 3,
+      "employeeCode": "CBS-03",
+      "fullName": "Hagos Berhe",
+      "email": "hagos@office.lan",
+      "password": "password123",
+      "role": "EMPLOYEE",
+      "originalRole": "EMPLOYEE",
+      "isTemporaryAdmin": false,
+      "temporaryAdminUntil": null,
+      "preferredLang": "ti",
+      "teams": []
+    },
+    {
+      "id": 4,
+      "employeeCode": "CBS-04",
+      "fullName": "Tolassa Chala",
+      "email": "tolassa@office.lan",
+      "password": "password123",
+      "role": "EMPLOYEE",
+      "originalRole": "EMPLOYEE",
+      "isTemporaryAdmin": false,
+      "temporaryAdminUntil": null,
+      "preferredLang": "om",
+      "teams": []
+    },
+    {
+      "id": 5,
+      "employeeCode": "CBS-05",
+      "fullName": "Sara Tesfaye",
+      "email": "sara@office.lan",
+      "password": "password123",
+      "role": "EMPLOYEE",
+      "originalRole": "EMPLOYEE",
+      "isTemporaryAdmin": false,
+      "temporaryAdminUntil": null,
+      "preferredLang": "am",
+      "teams": []
+    }
+  ],
+  "tasks": [],
+  "attendanceRecords": [
+    {
+      "id": 1,
+      "employeeId": 3,
+      "attendanceDate": "2026-11-22",
+      "checkIn": "2026-11-22T08:00:00.000Z",
+      "status": "PRESENT"
+    },
+    {
+      "id": 2,
+      "employeeId": 4,
+      "attendanceDate": "2026-11-22",
+      "checkIn": "2026-11-22T08:05:00.000Z",
+      "status": "PRESENT"
+    }
+  ],
+  "customAwards": {
+    "week": null,
+    "month": null,
+    "year": null
+  },
+  "messages": [
+    {
+      "id": 1,
+      "senderId": 1,
+      "senderName": "Admin User",
+      "senderRole": "ADMIN",
+      "recipientType": "ALL",
+      "recipientId": null,
+      "recipientName": "All Staff",
+      "content": "Welcome to the new operational platform. Please review your Q4 action items and report any planned absences ahead of time.",
+      "createdAt": "2026-11-22T08:00:00.000Z"
+    }
+  ]
+}
+

@@ -71,7 +71,7 @@ function generateNextCbsEmployeeCode() {
   return `CBS-${String(nextNum).padStart(2, '0')}`;
 }
 
-const employees = [
+let employees = [
   { id: 1, employeeCode: "CBS-01", fullName: "Admin User", email: "admin@office.lan", password: "password123", role: "ADMIN", preferredLang: "en", teams: [] },
   { id: 2, employeeCode: "CBS-02", fullName: "Abebe Bikila", email: "abebe@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "am", teams: [] },
   { id: 3, employeeCode: "CBS-03", fullName: "Hagos Berhe", email: "hagos@office.lan", password: "password123", role: "EMPLOYEE", originalRole: "EMPLOYEE", isTemporaryAdmin: false, temporaryAdminUntil: null, preferredLang: "ti", teams: [] },
@@ -114,6 +114,107 @@ let messages = [
     createdAt: new Date().toISOString()
   }
 ];
+
+// --- PERSISTENT DATABASE ENGINE (Zero Data Loss across Redeployments & Restarts) ---
+const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, '..', 'data');
+const DB_FILE = path.join(DATA_DIR, 'database.json');
+
+function ensureDataDir() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (err) {
+    console.error('[Database] Failed to ensure data dir:', err.message);
+  }
+}
+
+let saveDebounceTimer = null;
+let isDirty = false;
+
+function saveDatabase(immediate = false) {
+  isDirty = true;
+  const doSave = () => {
+    try {
+      ensureDataDir();
+      const payload = {
+        platform: "Office Attendance & Performance Platform",
+        version: "1.2.0",
+        savedAt: new Date().toISOString(),
+        counts: {
+          tasks: tasks.length,
+          employees: employees.length,
+          teams: teams.length,
+          attendanceRecords: attendanceRecords.length,
+          messages: messages.length
+        },
+        teams,
+        employees,
+        tasks,
+        attendanceRecords,
+        customAwards,
+        messages
+      };
+      const tmpFile = DB_FILE + '.tmp';
+      fs.writeFileSync(tmpFile, JSON.stringify(payload, null, 2), 'utf8');
+      fs.renameSync(tmpFile, DB_FILE);
+      isDirty = false;
+    } catch (e) {
+      console.error('[Database] Auto-save error:', e.message);
+    }
+  };
+
+  if (immediate) {
+    if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    doSave();
+  } else {
+    if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = setTimeout(doSave, 300);
+  }
+}
+
+function loadDatabase() {
+  try {
+    ensureDataDir();
+    if (fs.existsSync(DB_FILE)) {
+      const content = fs.readFileSync(DB_FILE, 'utf8');
+      const data = JSON.parse(content);
+      const payload = data.teams || data.employees || data.tasks ? data : (data.data || data);
+
+      if (Array.isArray(payload.teams)) {
+        teams = payload.teams;
+      }
+      if (Array.isArray(payload.employees) && payload.employees.length > 0) {
+        employees = payload.employees;
+      }
+      if (Array.isArray(payload.tasks)) {
+        tasks = payload.tasks;
+      }
+      if (Array.isArray(payload.attendanceRecords)) {
+        attendanceRecords = payload.attendanceRecords;
+      }
+      if (payload.customAwards && typeof payload.customAwards === 'object') {
+        customAwards = payload.customAwards;
+      }
+      if (Array.isArray(payload.messages)) {
+        messages = payload.messages;
+      }
+      console.log(`[Database] Loaded persistent data: ${tasks.length} tasks, ${employees.length} employees, ${teams.length} teams, ${attendanceRecords.length} attendance records.`);
+      return true;
+    }
+  } catch (e) {
+    console.error('[Database] Failed to load database from disk:', e.message);
+  }
+  saveDatabase(true);
+  return false;
+}
+
+// Initial Database Hydration on Startup
+loadDatabase();
+
+// Clean flush on process termination (Docker stop, SIGTERM, SIGINT)
+process.on('SIGTERM', () => { saveDatabase(true); process.exit(0); });
+process.on('SIGINT', () => { saveDatabase(true); process.exit(0); });
 
 function broadcastStompMessage(topic, payload) {
   const body = typeof payload === 'string' ? payload : JSON.stringify(payload);
@@ -490,36 +591,75 @@ const server = http.createServer((req, res) => {
   // Mobile APK Download Endpoint (Serves native Android APK with proper MIME, byte ranges and streaming)
   const isApkDownload = (p) => {
     if (!p) return false;
-    const lower = p.toLowerCase().replace(/\/+$/, '');
+    const lower = p.toLowerCase().split('?')[0].replace(/\/+$/, '');
     return lower === '/api/download/apk' ||
            lower === '/office-action.apk' ||
            lower === '/office-attendance.apk' ||
-           lower === '/app-debug.apk';
+           lower === '/app-debug.apk' ||
+           lower.endsWith('/office-action.apk') ||
+           lower.endsWith('/office-attendance.apk') ||
+           lower.endsWith('.apk');
   };
 
   if (isApkDownload(pathname)) {
     const apkPaths = [
+      path.resolve(__dirname, '..', 'frontend', 'public', 'Office-Action.apk'),
       path.resolve(__dirname, '..', 'frontend', 'dist', 'Office-Action.apk'),
       path.resolve(__dirname, '..', 'Office-Action.apk'),
-      path.resolve(__dirname, '..', 'frontend', 'dist', 'Office-Attendance.apk'),
-      path.resolve(__dirname, '..', 'Office-Attendance.apk'),
-      path.resolve(__dirname, '..', 'frontend', 'public', 'Office-Action.apk'),
-      path.resolve(__dirname, '..', 'frontend', 'public', 'Office-Attendance.apk'),
       path.resolve(process.cwd(), 'Office-Action.apk'),
-      path.resolve(process.cwd(), 'Office-Attendance.apk'),
+      path.resolve(process.cwd(), 'frontend', 'public', 'Office-Action.apk'),
       path.resolve(process.cwd(), 'frontend', 'dist', 'Office-Action.apk'),
       path.resolve(__dirname, 'Office-Action.apk'),
+      path.resolve(__dirname, '..', 'frontend', 'public', 'Office-Attendance.apk'),
+      path.resolve(__dirname, '..', 'frontend', 'dist', 'Office-Attendance.apk'),
+      path.resolve(__dirname, '..', 'Office-Attendance.apk'),
+      path.resolve(process.cwd(), 'Office-Attendance.apk'),
       path.resolve(__dirname, '..', 'frontend', 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk')
     ];
     const foundPath = apkPaths.find(p => fs.existsSync(p));
     if (foundPath) {
       const stat = fs.statSync(foundPath);
+      const totalSize = stat.size;
+      const range = req.headers['range'];
+
+      if (range) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+        const chunkSize = (end - start) + 1;
+
+        res.writeHead(206, {
+          'Content-Range': `bytes ${start}-${end}/${totalSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunkSize,
+          'Content-Type': 'application/vnd.android.package-archive',
+          'Content-Disposition': 'attachment; filename="Office-Action.apk"',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        });
+
+        if (req.method === 'HEAD') {
+          res.end();
+          return;
+        }
+
+        const stream = fs.createReadStream(foundPath, { start, end });
+        stream.on('error', (err) => {
+          console.error('Error streaming APK chunk:', err);
+          if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain' });
+          res.end('Error streaming APK file');
+        });
+        stream.pipe(res);
+        return;
+      }
+
       res.writeHead(200, {
         'Content-Type': 'application/vnd.android.package-archive',
-        'Content-Length': stat.size,
+        'Content-Length': totalSize,
         'Content-Disposition': 'attachment; filename="Office-Action.apk"',
         'Accept-Ranges': 'bytes',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0'
       });
@@ -577,6 +717,116 @@ const server = http.createServer((req, res) => {
     }
   }
 
+  // Admin: Download / Export Full Database Snapshot (.json)
+  if ((pathname === '/api/admin/database/backup' || pathname === '/api/database/backup') && req.method === 'GET') {
+    const backupData = {
+      platform: "Office Attendance & Performance Platform",
+      version: "1.2.0",
+      exportedAt: new Date().toISOString(),
+      counts: {
+        tasks: tasks.length,
+        employees: employees.length,
+        teams: teams.length,
+        attendanceRecords: attendanceRecords.length,
+        messages: messages.length
+      },
+      teams,
+      employees,
+      tasks,
+      attendanceRecords,
+      customAwards,
+      messages
+    };
+    const filename = `office_platform_backup_${getLocalDateString()}_${Date.now()}.json`;
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${filename}"`
+    });
+    res.end(JSON.stringify(backupData, null, 2));
+    return;
+  }
+
+  // Admin: Restore Database from Uploaded JSON Snapshot
+  if ((pathname === '/api/admin/database/restore' || pathname === '/api/database/restore') && req.method === 'POST') {
+    readBody(body => {
+      if (!body || typeof body !== 'object') {
+        json({ error: "Invalid backup format. Expected JSON object." }, 400);
+        return;
+      }
+
+      const payload = body.teams || body.employees || body.tasks ? body : (body.data || body);
+      let restoredCounts = { tasks: 0, employees: 0, teams: 0, attendance: 0 };
+
+      if (Array.isArray(payload.teams)) {
+        teams = payload.teams;
+        restoredCounts.teams = teams.length;
+      }
+      if (Array.isArray(payload.employees) && payload.employees.length > 0) {
+        employees = payload.employees;
+        restoredCounts.employees = employees.length;
+      }
+      if (Array.isArray(payload.tasks)) {
+        tasks = payload.tasks;
+        restoredCounts.tasks = tasks.length;
+      }
+      if (Array.isArray(payload.attendanceRecords)) {
+        attendanceRecords = payload.attendanceRecords;
+        restoredCounts.attendance = attendanceRecords.length;
+      }
+      if (payload.customAwards && typeof payload.customAwards === 'object') {
+        customAwards = payload.customAwards;
+      }
+      if (Array.isArray(payload.messages)) {
+        messages = payload.messages;
+      }
+
+      saveDatabase(true);
+
+      broadcastStompMessage('/topic/attendance', { type: 'DATABASE_RESTORED', timestamp: new Date().toISOString() });
+      broadcastStompMessage('/topic/tasks/updates', { action: 'RELOAD', timestamp: new Date().toISOString() });
+      broadcastStompMessage('/topic/admin/live-feed', {
+        id: String(Date.now()),
+        eventType: 'DATABASE_RESTORED',
+        title: 'Database Restored',
+        message: `Restored ${restoredCounts.tasks} tasks, ${restoredCounts.employees} staff, ${restoredCounts.teams} groups, ${restoredCounts.attendance} attendance records.`,
+        employeeName: 'Admin User',
+        severity: 'SUCCESS',
+        timestamp: new Date().toISOString()
+      });
+
+      json({
+        success: true,
+        message: `Restored ${restoredCounts.tasks} tasks, ${restoredCounts.employees} staff, ${restoredCounts.teams} groups, and ${restoredCounts.attendance} attendance records successfully.`,
+        counts: restoredCounts
+      });
+    });
+    return;
+  }
+
+  // Admin: Get Current Database Health and Persistence Status
+  if ((pathname === '/api/admin/database/status' || pathname === '/api/database/status') && req.method === 'GET') {
+    let fileSize = 0;
+    try {
+      if (fs.existsSync(DB_FILE)) {
+        fileSize = fs.statSync(DB_FILE).size;
+      }
+    } catch (e) {}
+
+    json({
+      status: "ACTIVE",
+      persistedFile: DB_FILE,
+      persistedFileSize: fileSize,
+      counts: {
+        tasks: tasks.length,
+        employees: employees.length,
+        teams: teams.length,
+        attendanceRecords: attendanceRecords.length,
+        messages: messages.length
+      }
+    });
+    return;
+  }
+
   // Teams: List All with Members
   if (pathname === '/api/teams' && req.method === 'GET') {
     const teamsWithMembers = teams.map(t => {
@@ -629,6 +879,7 @@ const server = http.createServer((req, res) => {
         timestamp: new Date().toISOString()
       });
 
+      saveDatabase();
       json({ success: true, team: newTeam });
     });
     return;
@@ -685,6 +936,7 @@ const server = http.createServer((req, res) => {
 
     broadcastStompMessage('/topic/tasks/updates', { action: 'RELOAD' });
 
+    saveDatabase();
     json({ success: true, message: `Department '${teamName}' deleted successfully.` });
     return;
   }
@@ -847,6 +1099,7 @@ const server = http.createServer((req, res) => {
         timestamp: new Date().toISOString()
       });
 
+      saveDatabase();
       json({ success: true, employee: newEmp });
     });
     return;
@@ -915,6 +1168,7 @@ const server = http.createServer((req, res) => {
 
     broadcastStompMessage('/topic/tasks/updates', { action: 'RELOAD' });
 
+    saveDatabase();
     json({ success: true, message: `Staff member '${empToDelete.fullName}' deleted successfully.` });
     return;
   }
@@ -940,6 +1194,7 @@ const server = http.createServer((req, res) => {
         return;
       }
       emp.password = newPassword;
+      saveDatabase();
       json({ success: true, message: `Password for ${emp.fullName} (${emp.employeeCode}) has been updated successfully.` });
     });
     return;
@@ -1166,6 +1421,7 @@ const server = http.createServer((req, res) => {
       timestamp: new Date().toISOString()
     });
 
+    saveDatabase();
     json({ success: true, status: 'PRESENT' });
     return;
   }
@@ -1270,6 +1526,7 @@ const server = http.createServer((req, res) => {
         timestamp: new Date().toISOString()
       });
 
+      saveDatabase();
       json(alertPayload);
     });
     return;
@@ -1311,6 +1568,7 @@ const server = http.createServer((req, res) => {
         severity: 'SUCCESS',
         timestamp: new Date().toISOString()
       });
+      saveDatabase();
       json({ success: true, message: `Absence cleared for ${emp.fullName} (${dates.length} days).` });
     });
     return;
@@ -1484,6 +1742,7 @@ const server = http.createServer((req, res) => {
 
       broadcastStompMessage('/topic/tasks/updates', { action: 'RELOAD', taskId: newTask.id });
 
+      saveDatabase();
       json({ success: true, task: newTask });
     });
     return;
@@ -1572,6 +1831,7 @@ const server = http.createServer((req, res) => {
         timestamp: new Date().toISOString()
       });
 
+      saveDatabase();
       json({ success: true, message: newMsg });
     });
     return;
@@ -1780,6 +2040,7 @@ const server = http.createServer((req, res) => {
             timestamp: new Date().toISOString()
           });
 
+          saveDatabase();
           json(task);
           return;
         }
@@ -1796,6 +2057,7 @@ const server = http.createServer((req, res) => {
           timestamp: new Date().toISOString()
         });
 
+        saveDatabase();
         json(task);
         return;
       }
@@ -1850,6 +2112,7 @@ const server = http.createServer((req, res) => {
           timestamp: new Date().toISOString()
         });
 
+        saveDatabase();
         json(task);
         return;
       }
@@ -1882,6 +2145,7 @@ const server = http.createServer((req, res) => {
           timestamp: new Date().toISOString()
         });
 
+        saveDatabase();
         json(task);
         return;
       }
@@ -1899,6 +2163,7 @@ const server = http.createServer((req, res) => {
         timestamp: new Date().toISOString()
       });
 
+      saveDatabase();
       json(task);
     });
     return;
@@ -2080,6 +2345,7 @@ const server = http.createServer((req, res) => {
       timestamp: new Date().toISOString()
     });
 
+    saveDatabase();
     json({ success: true, message: `Task '${deletedTask.title}' deleted successfully.` });
     return;
   }
@@ -2105,6 +2371,7 @@ const server = http.createServer((req, res) => {
       timestamp: new Date().toISOString()
     });
 
+    saveDatabase();
     json({ success: true, message: `Cleared all ${count} tasks.` });
     return;
   }
@@ -2172,6 +2439,7 @@ const server = http.createServer((req, res) => {
         timestamp: new Date().toISOString()
       });
 
+      saveDatabase();
       json(task);
     });
     return;
@@ -2769,6 +3037,7 @@ const server = http.createServer((req, res) => {
 
       broadcastStompMessage('/topic/tasks/updates', { action: 'RELOAD' });
 
+      saveDatabase();
       json({
         success: true,
         count: newTasksCreated.length,
@@ -3447,6 +3716,7 @@ const server = http.createServer((req, res) => {
 
       broadcastStompMessage('/topic/tasks/updates', { action: 'RELOAD' });
 
+      saveDatabase();
       json({
         success: true,
         message: `Successfully nominated ${emp.fullName} for ${titleMap[category]}!`,
@@ -3468,6 +3738,7 @@ const server = http.createServer((req, res) => {
     if (['week', 'month', 'year'].includes(cat)) {
       customAwards[cat] = null;
       broadcastStompMessage('/topic/tasks/updates', { action: 'RELOAD' });
+      saveDatabase();
       json({ success: true, message: `Award reset to auto-compute for ${cat}.` });
       return;
     }
@@ -3501,7 +3772,7 @@ const server = http.createServer((req, res) => {
       }
     } else {
       // If requesting binary or download file that does not exist, return 404 instead of HTML
-      if (pathname.endsWith('.apk') || pathname.endsWith('.zip') || pathname.endsWith('.xlsx')) {
+      if (!fs.existsSync(filePath) && (pathname.endsWith('.apk') || pathname.endsWith('.zip') || pathname.endsWith('.xlsx'))) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: "Requested file not found or build in progress." }));
         return;

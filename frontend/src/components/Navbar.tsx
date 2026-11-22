@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LogOut, Globe, Shield, User, Smartphone, Clock, RefreshCw, ChevronDown, KeyRound, Menu } from 'lucide-react';
+import { LogOut, Globe, Shield, User, Smartphone, Clock, RefreshCw, ChevronDown, KeyRound, Menu, Database } from 'lucide-react';
 import { MobileInstallModal } from './MobileInstallModal';
 import { ChangePasswordModal } from './ChangePasswordModal';
+import { DatabaseBackupModal } from './DatabaseBackupModal';
 import { OfficeActionLogo } from './OfficeActionLogo';
 
 interface NavbarProps {
@@ -15,6 +16,7 @@ interface NavbarProps {
   sessionTimeoutMinutes?: number;
   onChangeSessionTimeout?: (minutes: number) => void;
   onExtendSession?: () => void;
+  onDataRestored?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -26,11 +28,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   sessionRemainingSeconds = 600,
   sessionTimeoutMinutes = 10,
   onChangeSessionTimeout,
-  onExtendSession
+  onExtendSession,
+  onDataRestored
 }) => {
   const { t, i18n } = useTranslation();
   const [showMobileModal, setShowMobileModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showDbModal, setShowDbModal] = useState(false);
   const [showSessionMenu, setShowSessionMenu] = useState(false);
   const [showMobileLangMenu, setShowMobileLangMenu] = useState(false);
   const [showMobileUserMenu, setShowMobileUserMenu] = useState(false);
@@ -286,6 +290,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
               </div>
 
+              {/* Database Backup & Restore (Admin Only) */}
+              {(user?.role === 'ADMIN' || user?.isTemporaryAdmin) && (
+                <button
+                  onClick={() => setShowDbModal(true)}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 border border-emerald-300 transition cursor-pointer font-bold text-xs shadow-sm"
+                  title="Backup, Restore & Persist Database Across Deploys"
+                >
+                  <Database className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Backup / Restore</span>
+                </button>
+              )}
+
               {/* Change Password Button */}
               <button
                 onClick={() => setShowPasswordModal(true)}
@@ -355,6 +371,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <span>Install Mobile App</span>
                     </button>
 
+                    {(user?.role === 'ADMIN' || user?.isTemporaryAdmin) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMobileUserMenu(false);
+                          setShowDbModal(true);
+                        }}
+                        className="w-full flex items-center space-x-2 px-2.5 py-2 rounded-lg text-emerald-700 hover:bg-emerald-50 font-bold transition text-left"
+                      >
+                        <Database className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Backup & Restore Database</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => {
@@ -388,6 +418,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       onClose={() => setShowPasswordModal(false)}
       token={token || localStorage.getItem('auth_token') || localStorage.getItem('token') || user?.token || ''}
       user={user}
+    />
+
+    <DatabaseBackupModal
+      isOpen={showDbModal}
+      onClose={() => setShowDbModal(false)}
+      token={token || localStorage.getItem('auth_token') || localStorage.getItem('token') || user?.token || ''}
+      onDataRestored={onDataRestored}
     />
     </>
   );
